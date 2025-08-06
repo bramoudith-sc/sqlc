@@ -628,6 +628,61 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 				}
 			}
 
+		case *ast.ColumnRef:
+			// Handle INSERT column references
+			items := stringSlice(n.Fields)
+			var key string
+			switch len(items) {
+			case 1:
+				key = items[0]
+			case 2:
+				// table.column
+				key = items[1]
+			case 3:
+				// schema.table.column
+				key = items[2]
+			default:
+				addUnknownParam(ref)
+				continue
+			}
+			
+			// Try to find the column in the target table (for INSERT)
+			if ref.rv != nil {
+				fqn, err := ParseTableName(ref.rv)
+				if err == nil {
+					schema := fqn.Schema
+					if schema == "" {
+						schema = c.DefaultSchema
+					}
+					
+					if tableMap, ok := typeMap[schema][fqn.Name]; ok {
+						if c, ok := tableMap[key]; ok {
+							defaultP := named.NewInferredParam(key, c.IsNotNull)
+							p, isNamed := params.FetchMerge(ref.ref.Number, defaultP)
+							a = append(a, Parameter{
+								Number: ref.ref.Number,
+								Column: &Column{
+									Name:         p.Name(),
+									OriginalName: c.Name,
+									DataType:     dataType(&c.Type),
+									NotNull:      p.NotNull(),
+									Unsigned:     c.IsUnsigned,
+									IsArray:      c.IsArray,
+									ArrayDims:    c.ArrayDims,
+									Table:        &ast.TableName{Schema: schema, Name: fqn.Name},
+									Length:       c.Length,
+									IsNamedParam: isNamed,
+									IsSqlcSlice:  p.IsSqlcSlice(),
+								},
+							})
+							continue
+						}
+					}
+				}
+			}
+			// If we couldn't resolve it, fall back to unknown
+			addUnknownParam(ref)
+
 		default:
 			slog.Debug("unsupported reference type", "type", fmt.Sprintf("%T", n))
 			addUnknownParam(ref)

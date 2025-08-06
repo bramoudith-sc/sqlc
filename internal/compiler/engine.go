@@ -10,6 +10,7 @@ import (
 	"github.com/sqlc-dev/sqlc/internal/engine/dolphin"
 	"github.com/sqlc-dev/sqlc/internal/engine/postgresql"
 	pganalyze "github.com/sqlc-dev/sqlc/internal/engine/postgresql/analyzer"
+	"github.com/sqlc-dev/sqlc/internal/engine/spanner"
 	"github.com/sqlc-dev/sqlc/internal/engine/sqlite"
 	"github.com/sqlc-dev/sqlc/internal/opts"
 	"github.com/sqlc-dev/sqlc/internal/sql/catalog"
@@ -58,6 +59,10 @@ func NewCompiler(conf config.SQL, combo config.CombinedSettings) (*Compiler, err
 				)
 			}
 		}
+	case config.EngineSpanner:
+		c.parser = spanner.NewParser()
+		c.catalog = spanner.NewCatalog()
+		c.selector = newDefaultSelector()
 	default:
 		return nil, fmt.Errorf("unknown engine: %s", conf.Engine)
 	}

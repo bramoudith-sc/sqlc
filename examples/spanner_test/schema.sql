@@ -1,0 +1,5 @@
+CREATE TABLE users (
+  id STRING(36) NOT NULL,
+  name STRING(100),
+  email STRING(100)
+) PRIMARY KEY (id);

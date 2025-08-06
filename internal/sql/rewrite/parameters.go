@@ -168,7 +168,10 @@ func NamedParameters(engine config.Engine, raw *ast.RawStmt, numbs map[int]bool,
 
 			// TODO: This code assumes that @foo is on a single line
 			var replace string
-			if engine == config.EngineMySQL || !dollar {
+			if engine == config.EngineSpanner {
+				// Spanner uses @ parameters natively, so keep them as-is
+				replace = fmt.Sprintf("@%s", paramName)
+			} else if engine == config.EngineMySQL || !dollar {
 				replace = "?"
 			} else if engine == config.EngineSQLite {
 				replace = fmt.Sprintf("?%d", argn)
