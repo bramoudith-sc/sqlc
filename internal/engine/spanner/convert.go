@@ -1,3 +1,21 @@
+// Package spanner implements AST conversion from memefish (Spanner SQL parser) to sqlc's internal AST.
+//
+// Key architectural decisions:
+//
+// 1. List initialization: All sqlcast.List fields that are walked by the compiler must be initialized
+//    with empty Items arrays, not nil. The compiler's Walk function expects to iterate over these lists
+//    and will panic on nil. Fields that are conditionally accessed (like WhereClause) can be nil.
+//
+// 2. Star (*) handling: Spanner's Star nodes must be wrapped in ColumnRef to match PostgreSQL's AST
+//    structure. This wrapping is critical for the compiler's hasStarRef() and column expansion logic
+//    to work correctly. The pattern is: ResTarget -> ColumnRef -> A_Star.
+//
+// 3. THEN RETURN conversion: Spanner's THEN RETURN clause is converted to PostgreSQL's RETURNING
+//    clause, maintaining the same AST structure patterns (especially for Star nodes).
+//
+// 4. Function names: Spanner supports namespaced functions (e.g., NET.IPV4_TO_INT64, SAFE.DIVIDE).
+//    All path components are joined with dots to preserve the full function name for resolution.
+//
 package spanner
 
 import (
@@ -87,7 +105,10 @@ func (c *cc) convert(n ast.Node) sqlcast.Node {
 
 	// Other nodes
 	case *ast.Star:
-		// For standalone star, wrap in ColumnRef to match PostgreSQL structure
+		// Wrap A_Star in ColumnRef to match PostgreSQL's AST structure.
+		// PostgreSQL represents SELECT * as ColumnRef containing A_Star,
+		// not as a bare A_Star node. This wrapping is essential for
+		// proper type resolution in the compiler's outputColumns function.
 		return &sqlcast.ColumnRef{
 			Fields: &sqlcast.List{
 				Items: []sqlcast.Node{
@@ -142,11 +163,14 @@ func (c *cc) convertDropTable(n *ast.DropTable) *sqlcast.DropTableStmt {
 
 // DML Conversions
 func (c *cc) convertInsert(n *ast.Insert) *sqlcast.InsertStmt {
+	// IMPORTANT: List fields must be initialized with empty Items arrays, not nil.
+	// The sqlc compiler's Walk function expects Lists to be iterable even when empty.
+	// Using nil would cause a panic during AST traversal.
 	stmt := &sqlcast.InsertStmt{
 		Relation:      convertTableNameToRangeVar(n.TableName),
-		Cols:          &sqlcast.List{Items: []sqlcast.Node{}},
-		SelectStmt:    nil,
-		ReturningList: &sqlcast.List{Items: []sqlcast.Node{}},
+		Cols:          &sqlcast.List{Items: []sqlcast.Node{}}, // Must initialize with empty array
+		SelectStmt:    nil,                                    // Can be nil - not always walked
+		ReturningList: &sqlcast.List{Items: []sqlcast.Node{}}, // Must initialize for THEN RETURN support
 	}
 
 	// Convert column names
@@ -177,13 +201,14 @@ func (c *cc) convertInsert(n *ast.Insert) *sqlcast.InsertStmt {
 }
 
 func (c *cc) convertUpdate(n *ast.Update) *sqlcast.UpdateStmt {
+	// Initialize all List fields with empty Items arrays to prevent nil pointer panics
 	stmt := &sqlcast.UpdateStmt{
-		Relations:     &sqlcast.List{Items: []sqlcast.Node{}},
-		TargetList:    &sqlcast.List{Items: []sqlcast.Node{}},
-		WhereClause:   nil,
-		FromClause:    &sqlcast.List{Items: []sqlcast.Node{}},
-		ReturningList: &sqlcast.List{Items: []sqlcast.Node{}},
-		WithClause:    nil,
+		Relations:     &sqlcast.List{Items: []sqlcast.Node{}}, // Table being updated
+		TargetList:    &sqlcast.List{Items: []sqlcast.Node{}}, // SET clause items
+		WhereClause:   nil,                                    // Can be nil - conditional
+		FromClause:    &sqlcast.List{Items: []sqlcast.Node{}}, // Additional FROM tables
+		ReturningList: &sqlcast.List{Items: []sqlcast.Node{}}, // THEN RETURN -> RETURNING
+		WithClause:    nil,                                    // Can be nil - optional
 	}
 
 	// Add table to relations
@@ -225,12 +250,13 @@ func (c *cc) convertUpdate(n *ast.Update) *sqlcast.UpdateStmt {
 }
 
 func (c *cc) convertDelete(n *ast.Delete) *sqlcast.DeleteStmt {
+	// Lists must be initialized even when empty to support AST traversal
 	stmt := &sqlcast.DeleteStmt{
-		Relations:     &sqlcast.List{Items: []sqlcast.Node{}},
-		UsingClause:   &sqlcast.List{Items: []sqlcast.Node{}},
-		WhereClause:   nil,
-		ReturningList: &sqlcast.List{Items: []sqlcast.Node{}},
-		WithClause:    nil,
+		Relations:     &sqlcast.List{Items: []sqlcast.Node{}}, // Tables to delete from
+		UsingClause:   &sqlcast.List{Items: []sqlcast.Node{}}, // USING clause tables
+		WhereClause:   nil,                                    // Can be nil
+		ReturningList: &sqlcast.List{Items: []sqlcast.Node{}}, // For THEN RETURN support
+		WithClause:    nil,                                    // Can be nil
 	}
 
 	// Add table to relations
@@ -294,21 +320,27 @@ func (c *cc) convertQuery(n *ast.Query) sqlcast.Node {
 
 func (c *cc) convertSelect(n *ast.Select) *sqlcast.SelectStmt {
 	stmt := &sqlcast.SelectStmt{
-		TargetList:   &sqlcast.List{Items: []sqlcast.Node{}},
-		FromClause:   &sqlcast.List{Items: []sqlcast.Node{}},
-		WhereClause:  nil,
-		GroupClause:  &sqlcast.List{Items: []sqlcast.Node{}},
-		SortClause:   &sqlcast.List{Items: []sqlcast.Node{}},
-		LimitCount:   nil,
-		LimitOffset:  nil,
-		ValuesLists:  &sqlcast.List{Items: []sqlcast.Node{}},
+		// CRITICAL: Lists that are always walked must be initialized with Items arrays.
+		// The compiler's Walk function will panic if it encounters a nil List where
+		// it expects to iterate. This is a key difference from other AST nodes that
+		// can be nil (like WhereClause, which is checked before use).
+		TargetList:   &sqlcast.List{Items: []sqlcast.Node{}}, // SELECT items - always walked
+		FromClause:   &sqlcast.List{Items: []sqlcast.Node{}}, // FROM tables - always walked
+		WhereClause:  nil, // Can be nil - conditionally accessed
+		GroupClause:  nil, // Can be nil - only set if GROUP BY exists
+		SortClause:   nil, // Can be nil - only set if ORDER BY exists  
+		LimitCount:   nil, // Can be nil - scalar value
+		LimitOffset:  nil, // Can be nil - scalar value
+		ValuesLists:  nil, // Can be nil - only for VALUES queries
 	}
 
 	// Convert SELECT items
 	for _, item := range n.Results {
 		switch i := item.(type) {
 		case *ast.Star:
-			// Wrap A_Star in ColumnRef to match PostgreSQL's AST structure
+			// SELECT * must be wrapped: ResTarget -> ColumnRef -> A_Star
+			// This three-level structure matches PostgreSQL and enables
+			// the hasStarRef() check in output_columns.go to work correctly.
 			stmt.TargetList.Items = append(stmt.TargetList.Items, &sqlcast.ResTarget{
 				Val: &sqlcast.ColumnRef{
 					Fields: &sqlcast.List{
@@ -439,7 +471,9 @@ func (c *cc) convertCallExpr(n *ast.CallExpr) *sqlcast.FuncCall {
 	// Extract function name from path
 	var funcName string
 	if n.Func != nil && len(n.Func.Idents) > 0 {
-		// Join all identifiers with dots for functions like NET.IPV4_TO_INT64
+		// Join all identifiers with dots to support namespaced functions.
+		// Examples: NET.IPV4_TO_INT64, SAFE.DIVIDE, SAFE.NET.IPV4_TO_INT64
+		// This preserves the full function path for proper resolution.
 		var parts []string
 		for _, ident := range n.Func.Idents {
 			parts = append(parts, ident.Name)
@@ -576,7 +610,7 @@ func (c *cc) convertValuesInput(n *ast.ValuesInput) *sqlcast.SelectStmt {
 // convertThenReturn converts Spanner's THEN RETURN clause to PostgreSQL-style RETURNING
 func (c *cc) convertThenReturn(n *ast.ThenReturn) *sqlcast.List {
 	if n == nil {
-		return &sqlcast.List{Items: []sqlcast.Node{}}
+		return nil
 	}
 
 	returningList := &sqlcast.List{Items: []sqlcast.Node{}}
@@ -586,7 +620,8 @@ func (c *cc) convertThenReturn(n *ast.ThenReturn) *sqlcast.List {
 		switch i := item.(type) {
 		case *ast.Star:
 			// THEN RETURN * -> RETURNING *
-			// Wrap A_Star in ColumnRef to match PostgreSQL's AST structure
+			// Must maintain the same ColumnRef wrapping pattern as SELECT *
+			// to ensure consistent handling throughout the compiler.
 			returningList.Items = append(returningList.Items, &sqlcast.ResTarget{
 				Val: &sqlcast.ColumnRef{
 					Fields: &sqlcast.List{
