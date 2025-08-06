@@ -130,13 +130,13 @@ func spannerType(req *plugin.GenerateRequest, options *opts.Options, col *plugin
 	case "interval":
 		// INTERVAL - Spanner supports INTERVAL type
 		// https://cloud.google.com/spanner/docs/reference/standard-sql/data-types#interval_type
-		// Using spanner.NullInterval for proper support
+		// https://pkg.go.dev/cloud.google.com/go/spanner#Interval
 		if notNull {
-			// Note: There's no non-null Interval type in the SDK, 
-			// so we need to use string or a custom type
-			return "string" // Or could use a custom Interval type
+			// Use spanner.Interval for non-null INTERVAL type
+			// Note: spanner.Interval may not implement sql.Scanner
+			return "spanner.Interval"
 		}
-		// For nullable interval, use the proper Spanner type
+		// For nullable interval, use spanner.NullInterval
 		return "spanner.NullInterval"
 
 	case "any":

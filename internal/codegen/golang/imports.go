@@ -228,6 +228,10 @@ func buildImports(options *opts.Options, queries []Query, uses func(string) bool
 	if uses("pgvector.Vector") && !overrideVector {
 		pkg[ImportSpec{Path: "github.com/pgvector/pgvector-go"}] = struct{}{}
 	}
+	_, overrideInterval := overrideTypes["spanner.Interval"]
+	if uses("spanner.Interval") && !overrideInterval {
+		pkg[ImportSpec{Path: "cloud.google.com/go/spanner"}] = struct{}{}
+	}
 	_, overrideNullInterval := overrideTypes["spanner.NullInterval"]
 	if uses("spanner.NullInterval") && !overrideNullInterval {
 		pkg[ImportSpec{Path: "cloud.google.com/go/spanner"}] = struct{}{}
