@@ -46,6 +46,11 @@ func TestParse(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "SAFE prefix function",
+			input:   "SELECT SAFE.SUBSTR(name, 0, -2) FROM users;",
+			wantErr: false,
+		},
+		{
 			name:    "Multiple statements",
 			input:   "SELECT * FROM users; SELECT * FROM products;",
 			wantErr: false,

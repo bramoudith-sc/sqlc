@@ -7,7 +7,7 @@ import (
 
 func defaultSchema(name string) *catalog.Schema {
 	s := &catalog.Schema{Name: name}
-	
+
 	s.Funcs = []*catalog.Function{
 		// Mathematical Functions
 		{
@@ -285,7 +285,7 @@ func defaultSchema(name string) *catalog.Schema {
 				{Type: &ast.TypeName{Name: "string"}},
 				{Type: &ast.TypeName{Name: "string"}},
 			},
-			ReturnType: &ast.TypeName{Name: "string"},
+			ReturnType:         &ast.TypeName{Name: "string"},
 			ReturnTypeNullable: true,
 		},
 		{
@@ -308,13 +308,13 @@ func defaultSchema(name string) *catalog.Schema {
 
 		// Date and Time Functions
 		{
-			Name: "CURRENT_DATE",
-			Args: []*catalog.Argument{},
+			Name:       "CURRENT_DATE",
+			Args:       []*catalog.Argument{},
 			ReturnType: &ast.TypeName{Name: "date"},
 		},
 		{
-			Name: "CURRENT_TIMESTAMP",
-			Args: []*catalog.Argument{},
+			Name:       "CURRENT_TIMESTAMP",
+			Args:       []*catalog.Argument{},
 			ReturnType: &ast.TypeName{Name: "timestamp"},
 		},
 		{
@@ -600,6 +600,163 @@ func defaultSchema(name string) *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "any"},
 		},
 
+		// SAFE arithmetic functions - return NULL on overflow/error instead of raising errors
+		{
+			Name: "SAFE_ADD",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "int64"}},
+				{Type: &ast.TypeName{Name: "int64"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "int64"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_ADD",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "float64"}},
+				{Type: &ast.TypeName{Name: "float64"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "float64"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_ADD",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "numeric"}},
+				{Type: &ast.TypeName{Name: "numeric"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "numeric"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_SUBTRACT",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "int64"}},
+				{Type: &ast.TypeName{Name: "int64"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "int64"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_SUBTRACT",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "float64"}},
+				{Type: &ast.TypeName{Name: "float64"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "float64"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_SUBTRACT",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "numeric"}},
+				{Type: &ast.TypeName{Name: "numeric"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "numeric"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_MULTIPLY",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "int64"}},
+				{Type: &ast.TypeName{Name: "int64"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "int64"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_MULTIPLY",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "float64"}},
+				{Type: &ast.TypeName{Name: "float64"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "float64"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_MULTIPLY",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "numeric"}},
+				{Type: &ast.TypeName{Name: "numeric"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "numeric"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_DIVIDE",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "float64"}},
+				{Type: &ast.TypeName{Name: "float64"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "float64"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_DIVIDE",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "int64"}},
+				{Type: &ast.TypeName{Name: "int64"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "float64"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_DIVIDE",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "numeric"}},
+				{Type: &ast.TypeName{Name: "numeric"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "numeric"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_NEGATE",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "int64"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "int64"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_NEGATE",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "float64"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "float64"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_NEGATE",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "numeric"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "numeric"},
+			ReturnTypeNullable: true,
+		},
+
+		// Common SAFE. prefix functions
+		// Note: SAFE. prefix makes functions return NULL instead of raising errors
+		// TODO: Consider implementing dynamic SAFE. prefix handling in catalog resolution
+		{
+			Name: "SAFE.SUBSTR",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+				{Type: &ast.TypeName{Name: "int64"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "string"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE.SUBSTR",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+				{Type: &ast.TypeName{Name: "int64"}},
+				{Type: &ast.TypeName{Name: "int64"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "string"},
+			ReturnTypeNullable: true,
+		},
+
 		// Conditional Functions
 		{
 			Name: "IF",
@@ -636,13 +793,13 @@ func defaultSchema(name string) *catalog.Schema {
 
 		// Spanner-specific Functions
 		{
-			Name: "PENDING_COMMIT_TIMESTAMP",
-			Args: []*catalog.Argument{},
+			Name:       "PENDING_COMMIT_TIMESTAMP",
+			Args:       []*catalog.Argument{},
 			ReturnType: &ast.TypeName{Name: "timestamp"},
 		},
 		{
-			Name: "GENERATE_UUID",
-			Args: []*catalog.Argument{},
+			Name:       "GENERATE_UUID",
+			Args:       []*catalog.Argument{},
 			ReturnType: &ast.TypeName{Name: "string"},
 		},
 		{
@@ -782,28 +939,28 @@ func defaultSchema(name string) *catalog.Schema {
 
 		// Window Functions
 		{
-			Name: "ROW_NUMBER",
-			Args: []*catalog.Argument{},
+			Name:       "ROW_NUMBER",
+			Args:       []*catalog.Argument{},
 			ReturnType: &ast.TypeName{Name: "int64"},
 		},
 		{
-			Name: "RANK",
-			Args: []*catalog.Argument{},
+			Name:       "RANK",
+			Args:       []*catalog.Argument{},
 			ReturnType: &ast.TypeName{Name: "int64"},
 		},
 		{
-			Name: "DENSE_RANK",
-			Args: []*catalog.Argument{},
+			Name:       "DENSE_RANK",
+			Args:       []*catalog.Argument{},
 			ReturnType: &ast.TypeName{Name: "int64"},
 		},
 		{
-			Name: "PERCENT_RANK",
-			Args: []*catalog.Argument{},
+			Name:       "PERCENT_RANK",
+			Args:       []*catalog.Argument{},
 			ReturnType: &ast.TypeName{Name: "float64"},
 		},
 		{
-			Name: "CUME_DIST",
-			Args: []*catalog.Argument{},
+			Name:       "CUME_DIST",
+			Args:       []*catalog.Argument{},
 			ReturnType: &ast.TypeName{Name: "float64"},
 		},
 		{
@@ -891,6 +1048,96 @@ func defaultSchema(name string) *catalog.Schema {
 		},
 
 		// Network Functions
+		// SAFE arithmetic functions (handle overflow/errors)
+		{
+			Name: "SAFE_ADD",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "int64"}},
+				{Type: &ast.TypeName{Name: "int64"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "int64"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_ADD",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "numeric"}},
+				{Type: &ast.TypeName{Name: "numeric"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "numeric"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_SUBTRACT",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "int64"}},
+				{Type: &ast.TypeName{Name: "int64"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "int64"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_SUBTRACT",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "numeric"}},
+				{Type: &ast.TypeName{Name: "numeric"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "numeric"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_MULTIPLY",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "int64"}},
+				{Type: &ast.TypeName{Name: "int64"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "int64"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_MULTIPLY",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "numeric"}},
+				{Type: &ast.TypeName{Name: "numeric"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "numeric"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_DIVIDE",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "float64"}},
+				{Type: &ast.TypeName{Name: "float64"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "float64"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_DIVIDE",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "numeric"}},
+				{Type: &ast.TypeName{Name: "numeric"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "numeric"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_NEGATE",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "int64"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "int64"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "SAFE_NEGATE",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "numeric"}},
+			},
+			ReturnType:         &ast.TypeName{Name: "numeric"},
+			ReturnTypeNullable: true,
+		},
+		
 		{
 			Name: "NET.IPV4_TO_INT64",
 			Args: []*catalog.Argument{
@@ -919,6 +1166,77 @@ func defaultSchema(name string) *catalog.Schema {
 			},
 			ReturnType: &ast.TypeName{Name: "string"},
 		},
+		{
+			Name: "NET.HOST",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "string"},
+		},
+		{
+			Name: "NET.PUBLIC_SUFFIX",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "string"},
+		},
+		{
+			Name: "NET.REG_DOMAIN",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "string"},
+		},
 	}
+
+	// Automatically generate SAFE. versions for most functions
+	// SAFE. prefix makes functions return NULL instead of raising errors
+	baseFuncs := make([]*catalog.Function, len(s.Funcs))
+	copy(baseFuncs, s.Funcs)
+	
+	for _, fn := range baseFuncs {
+		// Skip functions that already have SAFE in the name or are SAFE_* arithmetic functions
+		if len(fn.Name) >= 4 && fn.Name[:4] == "SAFE" {
+			continue
+		}
+		// Skip aggregate functions (they don't have SAFE. versions)
+		if isAggregateFunction(fn.Name) {
+			continue
+		}
+		
+		// Create SAFE. version (works for both regular and namespaced functions)
+		safeFn := &catalog.Function{
+			Name:               "SAFE." + fn.Name,
+			Args:               fn.Args,
+			ReturnType:         fn.ReturnType,
+			ReturnTypeNullable: true, // SAFE functions always return nullable types
+		}
+		s.Funcs = append(s.Funcs, safeFn)
+	}
+
 	return s
+}
+
+func isAggregateFunction(name string) bool {
+	aggregates := map[string]bool{
+		"AVG":         true,
+		"COUNT":       true,
+		"MAX":         true,
+		"MIN":         true,
+		"SUM":         true,
+		"STRING_AGG":  true,
+		"ARRAY_AGG":   true,
+		"BIT_AND":     true,
+		"BIT_OR":      true,
+		"BIT_XOR":     true,
+		"LOGICAL_AND": true,
+		"LOGICAL_OR":  true,
+		"STDDEV":      true,
+		"STDDEV_POP":  true,
+		"STDDEV_SAMP": true,
+		"VARIANCE":    true,
+		"VAR_POP":     true,
+		"VAR_SAMP":    true,
+	}
+	return aggregates[name]
 }
