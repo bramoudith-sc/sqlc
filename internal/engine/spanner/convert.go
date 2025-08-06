@@ -701,6 +701,8 @@ func (c *cc) convertSchemaType(t ast.SchemaType) string {
 			return "date"
 		case "TIMESTAMP":
 			return "timestamp"
+		case "INTERVAL":
+			return "interval"
 		case "JSON":
 			return "json"
 		case "TOKENLIST":

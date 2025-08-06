@@ -389,6 +389,14 @@ func defaultSchema(name string) *catalog.Schema {
 			},
 			ReturnType: &ast.TypeName{Name: "timestamp"},
 		},
+		// INTERVAL functions
+		{
+			Name: "EXTRACT",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "interval"}},
+			},
+			ReturnType: &ast.TypeName{Name: "int64"},
+		},
 		{
 			Name: "TIMESTAMP_DIFF",
 			Args: []*catalog.Argument{

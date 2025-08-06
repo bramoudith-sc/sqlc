@@ -128,14 +128,16 @@ func spannerType(req *plugin.GenerateRequest, options *opts.Options, col *plugin
 		return "json.RawMessage"
 
 	case "interval":
-		// INTERVAL - not directly supported in Spanner
+		// INTERVAL - Spanner supports INTERVAL type
+		// https://cloud.google.com/spanner/docs/reference/standard-sql/data-types#interval_type
+		// Using spanner.NullInterval for proper support
 		if notNull {
-			return "string" // Store as string representation
+			// Note: There's no non-null Interval type in the SDK, 
+			// so we need to use string or a custom type
+			return "string" // Or could use a custom Interval type
 		}
-		if emitPointersForNull {
-			return "*string"
-		}
-		return "sql.NullString"
+		// For nullable interval, use the proper Spanner type
+		return "spanner.NullInterval"
 
 	case "any":
 		return "interface{}"
