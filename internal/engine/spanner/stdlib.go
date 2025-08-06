@@ -25,7 +25,21 @@ func defaultSchema(name string) *catalog.Schema {
 			ReturnType: &ast.TypeName{Name: "float64"},
 		},
 		{
+			Name: "ABS",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "numeric"}},
+			},
+			ReturnType: &ast.TypeName{Name: "numeric"},
+		},
+		{
 			Name: "CEIL",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "float64"}},
+			},
+			ReturnType: &ast.TypeName{Name: "float64"},
+		},
+		{
+			Name: "CEILING",
 			Args: []*catalog.Argument{
 				{Type: &ast.TypeName{Name: "float64"}},
 			},
@@ -75,6 +89,63 @@ func defaultSchema(name string) *catalog.Schema {
 				{Type: &ast.TypeName{Name: "int64"}},
 			},
 			ReturnType: &ast.TypeName{Name: "int64"},
+		},
+		{
+			Name: "LOG",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "float64"}},
+			},
+			ReturnType: &ast.TypeName{Name: "float64"},
+		},
+		{
+			Name: "LOG",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "float64"}},
+				{Type: &ast.TypeName{Name: "float64"}},
+			},
+			ReturnType: &ast.TypeName{Name: "float64"},
+		},
+		{
+			Name: "LOG10",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "float64"}},
+			},
+			ReturnType: &ast.TypeName{Name: "float64"},
+		},
+		{
+			Name: "EXP",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "float64"}},
+			},
+			ReturnType: &ast.TypeName{Name: "float64"},
+		},
+		{
+			Name: "SIGN",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "int64"}},
+			},
+			ReturnType: &ast.TypeName{Name: "int64"},
+		},
+		{
+			Name: "SIGN",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "float64"}},
+			},
+			ReturnType: &ast.TypeName{Name: "int64"},
+		},
+		{
+			Name: "GREATEST",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "any"}},
+			},
+			ReturnType: &ast.TypeName{Name: "any"},
+		},
+		{
+			Name: "LEAST",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "any"}},
+			},
+			ReturnType: &ast.TypeName{Name: "any"},
 		},
 
 		// String Functions
@@ -162,6 +233,78 @@ func defaultSchema(name string) *catalog.Schema {
 			},
 			ReturnType: &ast.TypeName{Name: "array"},
 		},
+		{
+			Name: "STARTS_WITH",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "bool"},
+		},
+		{
+			Name: "ENDS_WITH",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "bool"},
+		},
+		{
+			Name: "STRPOS",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "int64"},
+		},
+		{
+			Name: "REVERSE",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "string"},
+		},
+		{
+			Name: "FORMAT",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "string"},
+		},
+		{
+			Name: "REGEXP_CONTAINS",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "bool"},
+		},
+		{
+			Name: "REGEXP_EXTRACT",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "string"},
+			ReturnTypeNullable: true,
+		},
+		{
+			Name: "REGEXP_EXTRACT_ALL",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "array"},
+		},
+		{
+			Name: "REGEXP_REPLACE",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+				{Type: &ast.TypeName{Name: "string"}},
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "string"},
+		},
 
 		// Date and Time Functions
 		{
@@ -230,6 +373,63 @@ func defaultSchema(name string) *catalog.Schema {
 			},
 			ReturnType: &ast.TypeName{Name: "int64"},
 		},
+		{
+			Name: "TIMESTAMP_ADD",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "timestamp"}},
+				{Type: &ast.TypeName{Name: "interval"}},
+			},
+			ReturnType: &ast.TypeName{Name: "timestamp"},
+		},
+		{
+			Name: "TIMESTAMP_SUB",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "timestamp"}},
+				{Type: &ast.TypeName{Name: "interval"}},
+			},
+			ReturnType: &ast.TypeName{Name: "timestamp"},
+		},
+		{
+			Name: "TIMESTAMP_DIFF",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "timestamp"}},
+				{Type: &ast.TypeName{Name: "timestamp"}},
+				{Type: &ast.TypeName{Name: "any"}}, // date part
+			},
+			ReturnType: &ast.TypeName{Name: "int64"},
+		},
+		{
+			Name: "FORMAT_DATE",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+				{Type: &ast.TypeName{Name: "date"}},
+			},
+			ReturnType: &ast.TypeName{Name: "string"},
+		},
+		{
+			Name: "FORMAT_TIMESTAMP",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+				{Type: &ast.TypeName{Name: "timestamp"}},
+			},
+			ReturnType: &ast.TypeName{Name: "string"},
+		},
+		{
+			Name: "PARSE_DATE",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "date"},
+		},
+		{
+			Name: "PARSE_TIMESTAMP",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "timestamp"},
+		},
 
 		// Array Functions
 		{
@@ -246,6 +446,20 @@ func defaultSchema(name string) *catalog.Schema {
 				{Type: &ast.TypeName{Name: "string"}},
 			},
 			ReturnType: &ast.TypeName{Name: "string"},
+		},
+		{
+			Name: "ARRAY_CONCAT",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "array"}},
+			},
+			ReturnType: &ast.TypeName{Name: "array"},
+		},
+		{
+			Name: "ARRAY_REVERSE",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "array"}},
+			},
+			ReturnType: &ast.TypeName{Name: "array"},
 		},
 
 		// Aggregate Functions
@@ -319,6 +533,55 @@ func defaultSchema(name string) *catalog.Schema {
 				{Type: &ast.TypeName{Name: "any"}},
 			},
 			ReturnType: &ast.TypeName{Name: "array"},
+		},
+		{
+			Name: "COUNT_IF",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "bool"}},
+			},
+			ReturnType: &ast.TypeName{Name: "int64"},
+		},
+		{
+			Name: "STDDEV",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "float64"}},
+			},
+			ReturnType: &ast.TypeName{Name: "float64"},
+		},
+		{
+			Name: "STDDEV_POP",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "float64"}},
+			},
+			ReturnType: &ast.TypeName{Name: "float64"},
+		},
+		{
+			Name: "STDDEV_SAMP",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "float64"}},
+			},
+			ReturnType: &ast.TypeName{Name: "float64"},
+		},
+		{
+			Name: "VARIANCE",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "float64"}},
+			},
+			ReturnType: &ast.TypeName{Name: "float64"},
+		},
+		{
+			Name: "VAR_POP",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "float64"}},
+			},
+			ReturnType: &ast.TypeName{Name: "float64"},
+		},
+		{
+			Name: "VAR_SAMP",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "float64"}},
+			},
+			ReturnType: &ast.TypeName{Name: "float64"},
 		},
 
 		// Type Conversion Functions
@@ -410,6 +673,41 @@ func defaultSchema(name string) *catalog.Schema {
 			},
 			ReturnType: &ast.TypeName{Name: "bytes"},
 		},
+		{
+			Name: "MD5",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "bytes"}},
+			},
+			ReturnType: &ast.TypeName{Name: "bytes"},
+		},
+		{
+			Name: "TO_BASE64",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "bytes"}},
+			},
+			ReturnType: &ast.TypeName{Name: "string"},
+		},
+		{
+			Name: "FROM_BASE64",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "bytes"},
+		},
+		{
+			Name: "TO_HEX",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "bytes"}},
+			},
+			ReturnType: &ast.TypeName{Name: "string"},
+		},
+		{
+			Name: "FROM_HEX",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "bytes"},
+		},
 
 		// JSON Functions
 		{
@@ -457,6 +755,29 @@ func defaultSchema(name string) *catalog.Schema {
 				{Type: &ast.TypeName{Name: "any"}},
 			},
 			ReturnType: &ast.TypeName{Name: "string"},
+		},
+		{
+			Name: "PARSE_JSON",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "json"},
+		},
+		{
+			Name: "JSON_EXTRACT_ARRAY",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "json"}},
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "array"},
+		},
+		{
+			Name: "JSON_EXTRACT_STRING_ARRAY",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "json"}},
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "array"},
 		},
 
 		// Window Functions
@@ -519,6 +840,84 @@ func defaultSchema(name string) *catalog.Schema {
 				{Type: &ast.TypeName{Name: "any"}},
 			},
 			ReturnType: &ast.TypeName{Name: "any"},
+		},
+		{
+			Name: "NTH_VALUE",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "any"}},
+				{Type: &ast.TypeName{Name: "int64"}},
+			},
+			ReturnType: &ast.TypeName{Name: "any"},
+		},
+
+		// Bit Functions
+		{
+			Name: "BIT_AND",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "int64"}},
+				{Type: &ast.TypeName{Name: "int64"}},
+			},
+			ReturnType: &ast.TypeName{Name: "int64"},
+		},
+		{
+			Name: "BIT_OR",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "int64"}},
+				{Type: &ast.TypeName{Name: "int64"}},
+			},
+			ReturnType: &ast.TypeName{Name: "int64"},
+		},
+		{
+			Name: "BIT_XOR",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "int64"}},
+				{Type: &ast.TypeName{Name: "int64"}},
+			},
+			ReturnType: &ast.TypeName{Name: "int64"},
+		},
+		{
+			Name: "BIT_NOT",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "int64"}},
+			},
+			ReturnType: &ast.TypeName{Name: "int64"},
+		},
+		{
+			Name: "BIT_COUNT",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "int64"}},
+			},
+			ReturnType: &ast.TypeName{Name: "int64"},
+		},
+
+		// Network Functions
+		{
+			Name: "NET.IPV4_TO_INT64",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "int64"},
+		},
+		{
+			Name: "NET.INT64_TO_IPV4",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "int64"}},
+			},
+			ReturnType: &ast.TypeName{Name: "string"},
+		},
+		{
+			Name: "NET.IP_FROM_STRING",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "string"}},
+			},
+			ReturnType: &ast.TypeName{Name: "bytes"},
+		},
+		{
+			Name: "NET.IP_TO_STRING",
+			Args: []*catalog.Argument{
+				{Type: &ast.TypeName{Name: "bytes"}},
+			},
+			ReturnType: &ast.TypeName{Name: "string"},
 		},
 	}
 	return s

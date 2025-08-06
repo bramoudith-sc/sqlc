@@ -439,8 +439,12 @@ func (c *cc) convertCallExpr(n *ast.CallExpr) *sqlcast.FuncCall {
 	// Extract function name from path
 	var funcName string
 	if n.Func != nil && len(n.Func.Idents) > 0 {
-		// Use the last identifier as the function name
-		funcName = n.Func.Idents[len(n.Func.Idents)-1].Name
+		// Join all identifiers with dots for functions like NET.IPV4_TO_INT64
+		var parts []string
+		for _, ident := range n.Func.Idents {
+			parts = append(parts, ident.Name)
+		}
+		funcName = strings.Join(parts, ".")
 	}
 	
 	funcCall := &sqlcast.FuncCall{
