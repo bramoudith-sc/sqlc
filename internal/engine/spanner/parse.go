@@ -68,27 +68,8 @@ func (p *Parser) splitStatements(filename, content string) ([]statementWithMetad
 			}
 		}
 		
-		// Handle EOF
-		if tok.Kind == token.TokenEOF {
-			// Add any remaining statement
-			if firstTokenPos != -1 && stmtStartPos != -1 {
-				stmtSQL := content[firstTokenPos:tok.Pos]
-				stmtSQL = strings.TrimSpace(stmtSQL)
-				if stmtSQL != "" {
-					statements = append(statements, statementWithMetadata{
-						sql:         stmtSQL,
-						sqlStartPos: firstTokenPos,
-						startPos:    stmtStartPos,
-						endPos:      tok.Pos,
-						comments:    currentComments,
-					})
-				}
-			}
-			break
-		}
-		
 		// Track the first non-semicolon token position for SQL extraction
-		if tok.Kind != ";" && firstTokenPos == -1 {
+		if tok.Kind != ";" && tok.Kind != token.TokenEOF && firstTokenPos == -1 {
 			firstTokenPos = tok.Pos
 			// If we haven't seen any comments yet, start from this token
 			if stmtStartPos == -1 {
@@ -96,28 +77,39 @@ func (p *Parser) splitStatements(filename, content string) ([]statementWithMetad
 			}
 		}
 		
-		// Check for statement terminator
-		if tok.Kind == ";" {
-			if firstTokenPos != -1 {
-				// Extract the SQL statement (without leading comments, without trailing semicolon)
+		// Check for statement terminator (semicolon or EOF)
+		if tok.Kind == ";" || tok.Kind == token.TokenEOF {
+			// Add statement if we have content
+			if firstTokenPos != -1 && stmtStartPos != -1 {
 				stmtSQL := content[firstTokenPos:tok.Pos]
 				stmtSQL = strings.TrimSpace(stmtSQL)
 				
 				if stmtSQL != "" {
+					// For semicolon, include it in endPos; for EOF, use tok.Pos
+					endPos := tok.Pos
+					if tok.Kind == ";" {
+						endPos = tok.End
+					}
+					
 					statements = append(statements, statementWithMetadata{
 						sql:         stmtSQL,
 						sqlStartPos: firstTokenPos,
 						startPos:    stmtStartPos,
-						endPos:      tok.End, // Include the semicolon
+						endPos:      endPos,
 						comments:    currentComments,
 					})
 				}
-				
-				// Reset for next statement
-				currentComments = nil
-				stmtStartPos = -1
-				firstTokenPos = -1
 			}
+			
+			// If EOF, we're done
+			if tok.Kind == token.TokenEOF {
+				break
+			}
+			
+			// Reset for next statement (only for semicolon)
+			currentComments = nil
+			stmtStartPos = -1
+			firstTokenPos = -1
 		}
 	}
 	
