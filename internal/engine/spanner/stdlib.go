@@ -442,6 +442,8 @@ func defaultSchema(name string) *catalog.Schema {
 		},
 
 		// Array Functions
+		// Note: UNNEST is not included here because it's a table-valued function
+		// that requires special handling in convertUnnest and output_columns.go
 		{
 			Name: "ARRAY_LENGTH",
 			Args: []*catalog.Argument{

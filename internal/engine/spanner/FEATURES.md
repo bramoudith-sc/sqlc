@@ -67,8 +67,10 @@
 - SELECT * REPLACE - detected but column replacement not implemented
 
 ### UNNEST
-- Basic UNNEST in FROM clause - implemented
-- WITH OFFSET - implemented (maps to PostgreSQL's WITH ORDINALITY)
+- Basic UNNEST in FROM clause - partial implementation
+- WITH OFFSET - partial implementation (maps to PostgreSQL's WITH ORDINALITY)
+- **Known Issue**: Column name resolution not working due to value table semantics
+- **Limitation**: Requires changes to common logic in output_columns.go for full support
 
 ### DDL Operations  
 - CREATE TABLE - basic implementation

@@ -1963,59 +1963,67 @@ func (c *cc) convertSelectorExpr(n *ast.SelectorExpr) sqlcast.Node {
 }
 
 func (c *cc) convertUnnest(n *ast.Unnest) sqlcast.Node {
-	// UNNEST converts an array to a table-valued function result
-	// It can be used in FROM clause with optional WITH OFFSET
+	// UNNEST in Spanner returns a value table, which doesn't exist in PostgreSQL
+	// We need to map this to PostgreSQL's table-valued function approach
 	
-	// Convert to RangeFunction for use in FROM clause
+	// Build the UNNEST function call
+	unnestCall := &sqlcast.FuncCall{
+		Func: &sqlcast.FuncName{
+			Names: &sqlcast.List{
+				Items: []sqlcast.Node{
+					&sqlcast.String{Str: "unnest"},
+				},
+			},
+		},
+		Args: &sqlcast.List{
+			Items: []sqlcast.Node{
+				c.convert(n.Expr),
+			},
+		},
+	}
+	
+	// Create RangeFunction
 	rangeFunc := &sqlcast.RangeFunction{
 		Functions: &sqlcast.List{
 			Items: []sqlcast.Node{
 				&sqlcast.List{
-					Items: []sqlcast.Node{
-						&sqlcast.FuncCall{
-							Func: &sqlcast.FuncName{
-								Names: &sqlcast.List{
-									Items: []sqlcast.Node{
-										&sqlcast.String{Str: "unnest"},
-									},
-								},
-							},
-							Args: &sqlcast.List{
-								Items: []sqlcast.Node{
-									c.convert(n.Expr),
-								},
-							},
-						},
-					},
+					Items: []sqlcast.Node{unnestCall},
 				},
 			},
 		},
 	}
 	
+	// Determine column names
+	var colNames []sqlcast.Node
+	
+	// Column name for the value
+	colName := "value"
+	if n.As != nil && n.As.Alias != nil {
+		colName = identifier(n.As.Alias.Name)
+	}
+	colNames = append(colNames, &sqlcast.String{Str: colName})
+	
 	// Handle WITH OFFSET clause
-	// In PostgreSQL, this is represented as WITH ORDINALITY
 	if n.WithOffset != nil {
 		rangeFunc.Ordinality = true
 		
-		// If WITH OFFSET has an alias, it becomes a column alias
-		// Note: PostgreSQL's WITH ORDINALITY adds a column named "ordinality" by default
-		// Spanner's WITH OFFSET AS alias allows custom naming
+		// Column name for the offset
+		offsetColName := "offset"
 		if n.WithOffset.As != nil && n.WithOffset.As.Alias != nil {
-			// The offset column alias is handled separately in Spanner
-			// but PostgreSQL doesn't have direct support for renaming the ordinality column
-			// in the UNNEST clause itself
-			if debug.Active {
-				log.Printf("spanner.convertUnnest: WITH OFFSET AS alias - ordinality column aliasing may need manual handling\n")
-			}
+			offsetColName = identifier(n.WithOffset.As.Alias.Name)
 		}
+		colNames = append(colNames, &sqlcast.String{Str: offsetColName})
 	}
 	
-	// Handle alias for the value column
-	if n.As != nil && n.As.Alias != nil {
-		alias := identifier(n.As.Alias.Name)
-		rangeFunc.Alias = &sqlcast.Alias{
-			Aliasname: &alias,
-		}
+	// Set up the alias
+	// PostgreSQL syntax: unnest(...) AS table_alias (col1, col2, ...)
+	// We need a table alias for the function result
+	tableAlias := "unnest_table"
+	rangeFunc.Alias = &sqlcast.Alias{
+		Aliasname: &tableAlias,
+		Colnames: &sqlcast.List{
+			Items: colNames,
+		},
 	}
 	
 	return rangeFunc
