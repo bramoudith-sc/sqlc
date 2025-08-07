@@ -97,6 +97,14 @@ func (c *cc) convert(n ast.Node) sqlcast.Node {
 		return c.convertBinaryExpr(node)
 	case *ast.CallExpr:
 		return c.convertCallExpr(node)
+	case *ast.CaseExpr:
+		return c.convertCaseExpr(node)
+	case *ast.CastExpr:
+		return c.convertCastExpr(node)
+	case *ast.InExpr:
+		return c.convertInExpr(node)
+	case *ast.IsNullExpr:
+		return c.convertIsNullExpr(node)
 	case *ast.Param:
 		return c.convertParam(node)
 	case *ast.DefaultExpr:
@@ -400,7 +408,8 @@ func (c *cc) convertSelect(n *ast.Select) *sqlcast.SelectStmt {
 	}
 
 	// Convert GROUP BY
-	if n.GroupBy != nil {
+	if n.GroupBy != nil && len(n.GroupBy.Exprs) > 0 {
+		stmt.GroupClause = &sqlcast.List{Items: []sqlcast.Node{}}
 		for _, expr := range n.GroupBy.Exprs {
 			stmt.GroupClause.Items = append(stmt.GroupClause.Items, c.convert(expr))
 		}
@@ -547,12 +556,86 @@ func (c *cc) convertTableExpr(n ast.TableExpr) sqlcast.Node {
 	switch t := n.(type) {
 	case *ast.TableName:
 		name := identifier(t.Table.Name)
-		return &sqlcast.RangeVar{
+		rangeVar := &sqlcast.RangeVar{
 			Relname: &name,
 		}
+		// Handle table alias
+		if t.As != nil {
+			alias := identifier(t.As.Alias.Name)
+			rangeVar.Alias = &sqlcast.Alias{
+				Aliasname: &alias,
+			}
+		}
+		return rangeVar
+	case *ast.Join:
+		return c.convertJoin(t)
+	case *ast.ParenTableExpr:
+		// Handle parenthesized table expressions
+		return c.convertTableExpr(t.Source)
+	case *ast.SubQueryTableExpr:
+		// Handle subquery in FROM clause
+		subquery := &sqlcast.RangeSubselect{
+			Subquery: c.convert(t.Query),
+		}
+		if t.As != nil {
+			alias := identifier(t.As.Alias.Name)
+			subquery.Alias = &sqlcast.Alias{
+				Aliasname: &alias,
+			}
+		}
+		return subquery
 	default:
 		return todo(n)
 	}
+}
+
+func (c *cc) convertJoin(n *ast.Join) *sqlcast.JoinExpr {
+	if n == nil {
+		return nil
+	}
+	
+	// Map Spanner join types to PostgreSQL join types
+	var joinType sqlcast.JoinType
+	switch n.Op {
+	case ast.CommaJoin:
+		joinType = sqlcast.JoinTypeInner
+	case ast.CrossJoin:
+		joinType = sqlcast.JoinTypeInner // Cross join can be represented as inner join without condition
+	case ast.InnerJoin:
+		joinType = sqlcast.JoinTypeInner
+	case ast.LeftOuterJoin:
+		joinType = sqlcast.JoinTypeLeft
+	case ast.RightOuterJoin:
+		joinType = sqlcast.JoinTypeRight
+	case ast.FullOuterJoin:
+		joinType = sqlcast.JoinTypeFull
+	default:
+		joinType = sqlcast.JoinTypeInner
+	}
+	
+	joinExpr := &sqlcast.JoinExpr{
+		Jointype: joinType,
+		Larg:     c.convertTableExpr(n.Left),
+		Rarg:     c.convertTableExpr(n.Right),
+	}
+	
+	// Convert join condition
+	if n.Cond != nil {
+		switch cond := n.Cond.(type) {
+		case *ast.On:
+			joinExpr.Quals = c.convert(cond.Expr)
+		case *ast.Using:
+			// Convert USING clause to equality conditions
+			// This is a simplified implementation
+			var usingList []sqlcast.Node
+			for _, col := range cond.Idents {
+				usingList = append(usingList, &sqlcast.String{Str: identifier(col.Name)})
+			}
+			joinExpr.UsingClause = &sqlcast.List{Items: usingList}
+		}
+	}
+	
+	return joinExpr
 }
 
 func (c *cc) convertOrderBy(n *ast.OrderBy) *sqlcast.List {
@@ -763,5 +846,154 @@ func (c *cc) convertSchemaType(t ast.SchemaType) string {
 	default:
 		// For other types, return a generic text type
 		return "text"
+	}
+}
+
+// Additional Expression Conversions
+func (c *cc) convertCaseExpr(n *ast.CaseExpr) *sqlcast.CaseExpr {
+	if n == nil {
+		return nil
+	}
+	
+	// Convert WHEN clauses
+	var args []sqlcast.Node
+	for _, when := range n.Whens {
+		caseWhen := &sqlcast.CaseWhen{
+			Expr:     c.convert(when.Cond),
+			Result:   c.convert(when.Then),
+			Location: int(when.When) - c.positionOffset,
+		}
+		args = append(args, caseWhen)
+	}
+	
+	// Convert ELSE clause
+	var defResult sqlcast.Node
+	if n.Else != nil {
+		defResult = c.convert(n.Else.Expr)
+	}
+	
+	return &sqlcast.CaseExpr{
+		Arg:       c.convert(n.Expr), // The expression after CASE (if any)
+		Args:      &sqlcast.List{Items: args},
+		Defresult: defResult,
+		Location:  int(n.Case) - c.positionOffset,
+	}
+}
+
+func (c *cc) convertCastExpr(n *ast.CastExpr) *sqlcast.TypeCast {
+	if n == nil {
+		return nil
+	}
+	
+	return &sqlcast.TypeCast{
+		Arg:      c.convert(n.Expr),
+		TypeName: c.convertType(n.Type),
+		Location: int(n.Cast) - c.positionOffset,
+	}
+}
+
+func (c *cc) convertInExpr(n *ast.InExpr) sqlcast.Node {
+	if n == nil {
+		return nil
+	}
+	
+	// Convert the IN expression based on the condition type
+	var right sqlcast.Node
+	switch cond := n.Right.(type) {
+	case *ast.ValuesInCondition:
+		// IN (value1, value2, ...)
+		var items []sqlcast.Node
+		for _, expr := range cond.Exprs {
+			items = append(items, c.convert(expr))
+		}
+		right = &sqlcast.List{Items: items}
+	case *ast.SubQueryInCondition:
+		// IN (SELECT ...)
+		right = c.convert(cond.Query)
+	case *ast.UnnestInCondition:
+		// IN UNNEST(array_expr)
+		right = c.convert(cond.Expr)
+	default:
+		right = todo(cond)
+	}
+	
+	// Create the appropriate comparison node
+	if n.Not {
+		// NOT IN expression
+		return &sqlcast.A_Expr{
+			Kind: sqlcast.A_Expr_Kind(0), // AEXPR_OP
+			Name: &sqlcast.List{
+				Items: []sqlcast.Node{
+					&sqlcast.String{Str: "<>"},
+					&sqlcast.String{Str: "ALL"},
+				},
+			},
+			Lexpr:    c.convert(n.Left),
+			Rexpr:    right,
+			Location: -1,
+		}
+	}
+	
+	// IN expression  
+	return &sqlcast.A_Expr{
+		Kind: sqlcast.A_Expr_Kind_IN,
+		Name: &sqlcast.List{
+			Items: []sqlcast.Node{
+				&sqlcast.String{Str: "="},
+			},
+		},
+		Lexpr:    c.convert(n.Left),
+		Rexpr:    right,
+		Location: -1,
+	}
+}
+
+func (c *cc) convertIsNullExpr(n *ast.IsNullExpr) *sqlcast.NullTest {
+	if n == nil {
+		return nil
+	}
+	
+	var nullTestType sqlcast.NullTestType
+	if n.Not {
+		nullTestType = 1 // IS_NOT_NULL
+	} else {
+		nullTestType = 0 // IS_NULL
+	}
+	
+	return &sqlcast.NullTest{
+		Arg:          c.convert(n.Left),
+		Nulltesttype: nullTestType,
+		Location:     int(n.Null) - c.positionOffset,
+	}
+}
+
+func (c *cc) convertType(t ast.Type) *sqlcast.TypeName {
+	if t == nil {
+		return nil
+	}
+	
+	// Convert Spanner type to PostgreSQL-style type name
+	var typeName string
+	switch typ := t.(type) {
+	case *ast.SimpleType:
+		typeName = strings.ToLower(string(typ.Name))
+	case *ast.ArrayType:
+		// Handle array types
+		elemType := c.convertType(typ.Item)
+		if elemType != nil && len(elemType.Names.Items) > 0 {
+			if str, ok := elemType.Names.Items[0].(*sqlcast.String); ok {
+				typeName = str.Str + "[]"
+			}
+		}
+	default:
+		typeName = "unknown"
+	}
+	
+	return &sqlcast.TypeName{
+		Names: &sqlcast.List{
+			Items: []sqlcast.Node{
+				&sqlcast.String{Str: typeName},
+			},
+		},
 	}
 }

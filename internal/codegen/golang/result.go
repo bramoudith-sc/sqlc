@@ -225,6 +225,7 @@ func buildQueries(req *plugin.GenerateRequest, options *opts.Options, structs []
 			SQL:          query.Text,
 			Comments:     comments,
 			Table:        query.InsertIntoTable,
+			Engine:       req.Settings.Engine,
 		}
 		sqlpkg := parseDriver(options.SqlPackage)
 
@@ -237,6 +238,7 @@ func buildQueries(req *plugin.GenerateRequest, options *opts.Options, structs []
 				DBName:    p.Column.GetName(),
 				Typ:       goType(req, options, p.Column),
 				SQLDriver: sqlpkg,
+				Engine:    req.Settings.Engine,
 				Column:    p.Column,
 			}
 		} else if len(query.Params) >= 1 {
@@ -256,6 +258,7 @@ func buildQueries(req *plugin.GenerateRequest, options *opts.Options, structs []
 				Name:        "arg",
 				Struct:      s,
 				SQLDriver:   sqlpkg,
+				Engine:      req.Settings.Engine,
 				EmitPointer: options.EmitParamsStructPointers,
 			}
 
@@ -275,6 +278,7 @@ func buildQueries(req *plugin.GenerateRequest, options *opts.Options, structs []
 				DBName:    name,
 				Typ:       goType(req, options, c),
 				SQLDriver: sqlpkg,
+				Engine:    req.Settings.Engine,
 			}
 		} else if putOutColumns(query) {
 			var gs *Struct
@@ -321,6 +325,7 @@ func buildQueries(req *plugin.GenerateRequest, options *opts.Options, structs []
 				Name:        "i",
 				Struct:      gs,
 				SQLDriver:   sqlpkg,
+				Engine:      req.Settings.Engine,
 				EmitPointer: options.EmitResultStructPointers,
 			}
 		}

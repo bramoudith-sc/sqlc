@@ -1,3 +1,26 @@
+// Package spanner provides the Cloud Spanner SQL parser for sqlc.
+//
+// # Named Parameters Design Decision
+//
+// Unlike PostgreSQL, MySQL, and SQLite engines which convert named parameters
+// (e.g., @name or sqlc.arg('name')) to positional parameters in the SQL query,
+// the Spanner engine preserves named parameters (@name) in the generated SQL.
+//
+// This is because:
+//  1. Cloud Spanner natively supports named parameters with @ syntax
+//  2. The go-sql-spanner driver can bind positional arguments to named parameters
+//  3. Other drivers (lib/pq, go-sql-driver/mysql) don't support sql.Named()
+//
+// For consistency with other engines and to minimize changes to the common
+// code generation logic, sqlc currently generates code using positional
+// arguments even for Spanner. This avoids the need for engine-specific
+// parameter handling in the shared codegen layer, relying instead on the
+// go-sql-spanner driver's ability to automatically bind positional arguments
+// to named parameters.
+//
+// This is a pragmatic trade-off for the initial implementation. Future versions
+// may consider more native support for named parameters using sql.Named() once
+// the common codegen layer can better accommodate engine-specific differences.
 package spanner
 
 // TODO: Future enhancements for Cloud Spanner engine:
