@@ -33,7 +33,7 @@ func TestWithEmulator(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	
+
 	// Create clients for emulator
 	conn, err := grpc.Dial(os.Getenv("SPANNER_EMULATOR_HOST"), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -205,7 +205,7 @@ func testIntervalType(t *testing.T, ctx context.Context, client *spanner.Client)
 func testJSONType(t *testing.T, ctx context.Context, client *spanner.Client) {
 	// Test JSON type operations
 	jsonData := `{"key": "value", "number": 42}`
-	
+
 	_, err := client.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 		stmt := spanner.Statement{
 			SQL: `UPDATE users SET metadata = @metadata WHERE id = @id`,
@@ -248,7 +248,7 @@ func testJSONType(t *testing.T, ctx context.Context, client *spanner.Client) {
 func testArrayType(t *testing.T, ctx context.Context, client *spanner.Client) {
 	// Test ARRAY type operations
 	tags := []string{"golang", "spanner", "database"}
-	
+
 	_, err := client.ReadWriteTransaction(ctx, func(ctx context.Context, txn *spanner.ReadWriteTransaction) error {
 		stmt := spanner.Statement{
 			SQL: `INSERT INTO posts (id, user_id, title, tags) VALUES (@id, @user_id, @title, @tags)`,

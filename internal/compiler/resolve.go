@@ -645,7 +645,7 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 				addUnknownParam(ref)
 				continue
 			}
-			
+
 			// Try to find the column in the target table (for INSERT)
 			if ref.rv != nil {
 				fqn, err := ParseTableName(ref.rv)
@@ -654,7 +654,7 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 					if schema == "" {
 						schema = c.DefaultSchema
 					}
-					
+
 					if tableMap, ok := typeMap[schema][fqn.Name]; ok {
 						if c, ok := tableMap[key]; ok {
 							defaultP := named.NewInferredParam(key, c.IsNotNull)

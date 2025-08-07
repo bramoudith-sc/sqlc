@@ -19,11 +19,11 @@ import (
 // Run with: SPANNER_EMULATOR_HOST=localhost:9010 go test -tags=emulator ./internal/engine/spanner/
 func TestWithSQLDriverEmulator(t *testing.T) {
 	ctx := context.Background()
-	
+
 	// The go-sql-spanner driver automatically configures the emulator
 	// when SPANNER_EMULATOR_HOST is set and autoConfigEmulator=true
 	dsn := "projects/test-project/instances/test-instance/databases/test-db?autoConfigEmulator=true"
-	
+
 	db, err := sql.Open("spanner", dsn)
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
@@ -104,7 +104,7 @@ func testBasicSQLOperations(t *testing.T, ctx context.Context, db *sql.DB) {
 	db.ExecContext(ctx, "DELETE FROM users WHERE true")
 
 	// Test INSERT
-	result, err := db.ExecContext(ctx, 
+	result, err := db.ExecContext(ctx,
 		"INSERT INTO users (id, name, email, created_at) VALUES (@id, @name, @email, @created_at)",
 		sql.Named("id", 1),
 		sql.Named("name", "Alice"),
@@ -124,12 +124,12 @@ func testBasicSQLOperations(t *testing.T, ctx context.Context, db *sql.DB) {
 	var id int64
 	var name, email sql.NullString
 	var createdAt sql.NullTime
-	
+
 	row := db.QueryRowContext(ctx,
 		"SELECT id, name, email, created_at FROM users WHERE id = @id",
 		sql.Named("id", 1),
 	)
-	
+
 	if err := row.Scan(&id, &name, &email, &createdAt); err != nil {
 		t.Fatalf("Failed to scan user: %v", err)
 	}
@@ -178,12 +178,12 @@ func testSQLIntervalType(t *testing.T, ctx context.Context, db *sql.DB) {
 
 	var today, tomorrow, lastMonth civil.Date
 	var nextHour time.Time
-	
+
 	if err := rows.Scan(&today, &tomorrow, &lastMonth, &nextHour); err != nil {
 		t.Fatalf("Failed to scan interval results: %v", err)
 	}
 
-	t.Logf("Interval operations: today=%v, tomorrow=%v, last_month=%v, next_hour=%v", 
+	t.Logf("Interval operations: today=%v, tomorrow=%v, last_month=%v, next_hour=%v",
 		today, tomorrow, lastMonth, nextHour)
 
 	// Verify the date arithmetic
@@ -195,9 +195,9 @@ func testSQLIntervalType(t *testing.T, ctx context.Context, db *sql.DB) {
 func testSQLJSONType(t *testing.T, ctx context.Context, db *sql.DB) {
 	// Clean and insert test data
 	db.ExecContext(ctx, "DELETE FROM users WHERE true")
-	
+
 	jsonData := `{"name": "Alice", "age": 30, "hobbies": ["reading", "coding"]}`
-	
+
 	// Use PARSE_JSON to convert string to JSON type
 	_, err := db.ExecContext(ctx,
 		"INSERT INTO users (id, name, metadata) VALUES (@id, @name, PARSE_JSON(@metadata))",
@@ -240,7 +240,7 @@ func testSQLJSONType(t *testing.T, ctx context.Context, db *sql.DB) {
 			if err := row.Scan(&result); err != nil {
 				t.Fatalf("Failed to scan JSON result: %v", err)
 			}
-			
+
 			if !result.Valid {
 				t.Errorf("Expected valid result, got NULL")
 			} else if result.String != tc.want {
@@ -254,14 +254,14 @@ func testSQLArrayType(t *testing.T, ctx context.Context, db *sql.DB) {
 	// Clean and insert test data
 	db.ExecContext(ctx, "DELETE FROM posts WHERE true")
 	db.ExecContext(ctx, "DELETE FROM users WHERE true")
-	
+
 	// Create user first for foreign key
 	db.ExecContext(ctx,
 		"INSERT INTO users (id, name) VALUES (@id, @name)",
 		sql.Named("id", 2),
 		sql.Named("name", "Test User"),
 	)
-	
+
 	// Note: go-sql-spanner handles arrays differently
 	// We'll use ARRAY constructor in SQL
 	_, err := db.ExecContext(ctx, `
@@ -281,7 +281,7 @@ func testSQLArrayType(t *testing.T, ctx context.Context, db *sql.DB) {
 		"SELECT ARRAY_LENGTH(tags) FROM posts WHERE id = @id",
 		sql.Named("id", 1),
 	)
-	
+
 	if err := row.Scan(&arrayLength); err != nil {
 		t.Fatalf("Failed to scan array length: %v", err)
 	}
@@ -297,7 +297,7 @@ func testSQLArrayType(t *testing.T, ctx context.Context, db *sql.DB) {
 		sql.Named("id", 1),
 		sql.Named("tag", "golang"),
 	)
-	
+
 	if err := row.Scan(&hasTag); err != nil {
 		t.Fatalf("Failed to scan ARRAY_INCLUDES: %v", err)
 	}
@@ -325,7 +325,7 @@ func testSQLSafeFunctions(t *testing.T, ctx context.Context, db *sql.DB) {
 	}
 
 	var normalDivide, divideByZero sql.NullFloat64
-	
+
 	if err := rows.Scan(&normalDivide, &divideByZero); err != nil {
 		t.Fatalf("Failed to scan SAFE results: %v", err)
 	}
@@ -345,19 +345,19 @@ func testSQLThenReturn(t *testing.T, ctx context.Context, db *sql.DB) {
 	// Clean up
 	db.ExecContext(ctx, "DELETE FROM posts WHERE true")
 	db.ExecContext(ctx, "DELETE FROM users WHERE true")
-	
+
 	// Create user first for foreign key
 	db.ExecContext(ctx,
 		"INSERT INTO users (id, name) VALUES (@id, @name)",
 		sql.Named("id", 2),
 		sql.Named("name", "Test User"),
 	)
-	
+
 	// Test INSERT ... THEN RETURN
 	var returnedID int64
 	var returnedTitle sql.NullString
 	var returnedViewCount sql.NullInt64
-	
+
 	row := db.QueryRowContext(ctx, `
 		INSERT INTO posts (id, user_id, title, published) 
 		VALUES (@id, @user_id, @title, @published)
@@ -367,7 +367,7 @@ func testSQLThenReturn(t *testing.T, ctx context.Context, db *sql.DB) {
 		sql.Named("title", "New Post"),
 		sql.Named("published", true),
 	)
-	
+
 	if err := row.Scan(&returnedID, &returnedTitle, &returnedViewCount); err != nil {
 		t.Fatalf("Failed to scan THEN RETURN results: %v", err)
 	}
@@ -393,7 +393,7 @@ func testSQLThenReturn(t *testing.T, ctx context.Context, db *sql.DB) {
 		sql.Named("new_title", "Updated Post"),
 		sql.Named("id", 100),
 	)
-	
+
 	if err := row.Scan(&returnedID, &returnedTitle, &returnedViewCount); err != nil {
 		t.Fatalf("Failed to scan UPDATE THEN RETURN: %v", err)
 	}
