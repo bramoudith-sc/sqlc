@@ -10,8 +10,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"time"
-
-	"cloud.google.com/go/spanner"
 )
 
 const getActiveUsers = `-- name: GetActiveUsers :many
@@ -507,9 +505,9 @@ const testIntervalRange = `-- name: TestIntervalRange :one
 SELECT INTERVAL '1-2' YEAR TO MONTH as interval_range;
 `
 
-func (q *Queries) TestIntervalRange(ctx context.Context) (spanner.Interval, error) {
+func (q *Queries) TestIntervalRange(ctx context.Context) (interface{}, error) {
 	row := q.db.QueryRowContext(ctx, testIntervalRange)
-	var interval_range spanner.Interval
+	var interval_range interface{}
 	err := row.Scan(&interval_range)
 	return interval_range, err
 }
@@ -519,9 +517,9 @@ SELECT INTERVAL 5 DAY as interval_days;
 `
 
 // Test INTERVAL support
-func (q *Queries) TestIntervalSingle(ctx context.Context) (spanner.Interval, error) {
+func (q *Queries) TestIntervalSingle(ctx context.Context) (interface{}, error) {
 	row := q.db.QueryRowContext(ctx, testIntervalSingle)
-	var interval_days spanner.Interval
+	var interval_days interface{}
 	err := row.Scan(&interval_days)
 	return interval_days, err
 }
@@ -535,6 +533,20 @@ func (q *Queries) TestJsonLiteral(ctx context.Context) (json.RawMessage, error) 
 	var json_value json.RawMessage
 	err := row.Scan(&json_value)
 	return json_value, err
+}
+
+const testMixedStruct = `-- name: TestMixedStruct :one
+SELECT 
+  STRUCT(u.id as uid, 'fixed' as fixed_val, u.score as uscore).uscore as mixed_score
+FROM users u
+WHERE u.id = @user_id;
+`
+
+func (q *Queries) TestMixedStruct(ctx context.Context, id string) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, testMixedStruct, id)
+	var mixed_score interface{}
+	err := row.Scan(&mixed_score)
+	return mixed_score, err
 }
 
 const testNullLiteral = `-- name: TestNullLiteral :one
@@ -650,6 +662,107 @@ func (q *Queries) TestStructFieldAccess2(ctx context.Context) (string, error) {
 	return typed_name, err
 }
 
+const testStructFieldAccessAny = `-- name: TestStructFieldAccessAny :one
+SELECT 
+  STRUCT(1 as id, 'John' as name).unknown_field as unknown;
+`
+
+func (q *Queries) TestStructFieldAccessAny(ctx context.Context) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, testStructFieldAccessAny)
+	var unknown interface{}
+	err := row.Scan(&unknown)
+	return unknown, err
+}
+
+const testStructFieldAccessBool = `-- name: TestStructFieldAccessBool :one
+SELECT 
+  STRUCT<id INT64, name STRING, active BOOL>(42, 'Alice', true).active as is_active;
+`
+
+func (q *Queries) TestStructFieldAccessBool(ctx context.Context) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, testStructFieldAccessBool)
+	var is_active interface{}
+	err := row.Scan(&is_active)
+	return is_active, err
+}
+
+const testStructFieldAccessDate = `-- name: TestStructFieldAccessDate :one
+SELECT 
+  STRUCT<created DATE, name STRING>(DATE '2024-01-01', 'Test').created as created_date;
+`
+
+func (q *Queries) TestStructFieldAccessDate(ctx context.Context) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, testStructFieldAccessDate)
+	var created_date interface{}
+	err := row.Scan(&created_date)
+	return created_date, err
+}
+
+const testStructFieldAccessFloat = `-- name: TestStructFieldAccessFloat :one
+SELECT 
+  STRUCT<score FLOAT64, name STRING>(3.14, 'Pi').score as score_value;
+`
+
+func (q *Queries) TestStructFieldAccessFloat(ctx context.Context) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, testStructFieldAccessFloat)
+	var score_value interface{}
+	err := row.Scan(&score_value)
+	return score_value, err
+}
+
+const testStructFieldAccessInt = `-- name: TestStructFieldAccessInt :one
+SELECT 
+  STRUCT(1 as id, 'John' as name).id as person_id;
+`
+
+func (q *Queries) TestStructFieldAccessInt(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, testStructFieldAccessInt)
+	var person_id int64
+	err := row.Scan(&person_id)
+	return person_id, err
+}
+
+const testStructFieldAccessTypedInt = `-- name: TestStructFieldAccessTypedInt :one
+SELECT 
+  STRUCT<id INT64, name STRING, active BOOL>(42, 'Alice', true).id as typed_id;
+`
+
+func (q *Queries) TestStructFieldAccessTypedInt(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, testStructFieldAccessTypedInt)
+	var typed_id int64
+	err := row.Scan(&typed_id)
+	return typed_id, err
+}
+
+const testStructWithTableColumns = `-- name: TestStructWithTableColumns :one
+SELECT 
+  STRUCT(u.id as user_id, u.name as user_name).user_name as name_from_struct
+FROM users u
+WHERE u.id = @user_id;
+`
+
+// Test STRUCT with table column references
+func (q *Queries) TestStructWithTableColumns(ctx context.Context, id string) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, testStructWithTableColumns, id)
+	var name_from_struct interface{}
+	err := row.Scan(&name_from_struct)
+	return name_from_struct, err
+}
+
+const testStructWithTableColumnsInt = `-- name: TestStructWithTableColumnsInt :one
+SELECT 
+  STRUCT(u.id as uid, u.score as uscore).uscore as score_from_struct
+FROM users u
+WHERE u.id = @user_id;
+`
+
+func (q *Queries) TestStructWithTableColumnsInt(ctx context.Context, id string) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, testStructWithTableColumnsInt, id)
+	var score_from_struct interface{}
+	err := row.Scan(&score_from_struct)
+	return score_from_struct, err
+}
+
 const testTimestampLiteral = `-- name: TestTimestampLiteral :one
 SELECT CASE WHEN true THEN TIMESTAMP '2024-01-01 10:00:00' ELSE TIMESTAMP '2024-12-31 23:59:59' END as timestamp_value;
 `
@@ -681,6 +794,20 @@ func (q *Queries) TestTypedStruct(ctx context.Context) (interface{}, error) {
 	var typed_struct interface{}
 	err := row.Scan(&typed_struct)
 	return typed_struct, err
+}
+
+const testTypedStructWithTableColumns = `-- name: TestTypedStructWithTableColumns :one
+SELECT 
+  STRUCT<uid STRING, uname STRING>(u.id, u.name).uname as typed_name
+FROM users u
+WHERE u.id = @user_id;
+`
+
+func (q *Queries) TestTypedStructWithTableColumns(ctx context.Context, id string) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, testTypedStructWithTableColumns, id)
+	var typed_name interface{}
+	err := row.Scan(&typed_name)
+	return typed_name, err
 }
 
 const testTypelessStruct = `-- name: TestTypelessStruct :one

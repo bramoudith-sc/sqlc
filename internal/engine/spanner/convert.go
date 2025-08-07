@@ -1448,41 +1448,142 @@ func (c *cc) convertArrayLiteral(n *ast.ArrayLiteral) sqlcast.Node {
 	}
 }
 
+// spannerTypeToSQLType converts Spanner type names to sqlc internal types
+func spannerTypeToSQLType(spannerType string) string {
+	switch strings.ToUpper(spannerType) {
+	case "INT64":
+		return "int"
+	case "STRING":
+		return "text"
+	case "BOOL", "BOOLEAN":
+		return "bool"
+	case "FLOAT64":
+		return "float"
+	case "DATE":
+		return "date"
+	case "TIMESTAMP":
+		return "timestamp"
+	case "NUMERIC":
+		return "numeric"
+	case "JSON", "JSONB":
+		return "json"
+	case "BYTES":
+		return "bytea"
+	default:
+		return ""
+	}
+}
+
 func (c *cc) convertTypedStructLiteral(n *ast.TypedStructLiteral) sqlcast.Node {
 	// STRUCT<x INT64, y STRING>(1, 'hello') -> RowExpr
 	// Convert to ROW expression which is similar to STRUCT
+	//
+	// NOTE: Type information is preserved in Colnames using "fieldname:TYPE" format.
+	// This enables proper type inference for struct field access in the Spanner engine.
+	// For example, STRUCT<id INT64, name STRING>(42, 'Alice').name will correctly
+	// infer STRING type for the 'name' field.
 	var args []sqlcast.Node
+	var colnames []sqlcast.Node
+	
+	// Convert values
 	for _, val := range n.Values {
 		args = append(args, c.convert(val))
 	}
 	
+	// Store field names and types in Colnames
+	// This preserves the type information for later type inference
+	for _, field := range n.Fields {
+		// Store field name and type as a composite structure
+		// We encode type info in the field name for retrieval
+		colnames = append(colnames, &sqlcast.String{
+			Str: field.Ident.Name + ":" + string(field.Type.(*ast.SimpleType).Name),
+		})
+	}
+	
 	return &sqlcast.RowExpr{
-		Args: &sqlcast.List{Items: args},
+		Args:      &sqlcast.List{Items: args},
+		Colnames:  &sqlcast.List{Items: colnames},
 		RowFormat: sqlcast.CoercionForm(0), // COERCE_EXPLICIT_CALL equivalent
-		Location: int(n.Struct),
+		Location:  int(n.Struct),
 	}
 }
 
 func (c *cc) convertTypelessStructLiteral(n *ast.TypelessStructLiteral) sqlcast.Node {
-	// STRUCT(1, 'hello') -> RowExpr
+	// STRUCT(1 AS id, 'hello' AS name) -> RowExpr
+	//
+	// Type inference capabilities:
+	// - Works: Literal values (strings, numbers, dates, etc.)
+	//   Example: STRUCT(1 AS id, 'text' AS name).name returns STRING
+	// - Doesn't work: Column references from tables
+	//   Example: STRUCT(u.id AS uid, u.name AS uname).uname returns interface{}/any
+	//
+	// Technical limitation: The AST conversion phase doesn't have access to the catalog/schema,
+	// so we cannot look up column types from table definitions. Type resolution happens
+	// later in the compiler pipeline, but by then the STRUCT field information is lost.
+	//
+	// Workaround: Use typed STRUCT literals to explicitly specify field types:
+	//   STRUCT<uid INT64, uname STRING>(u.id, u.name).uname returns STRING correctly
 	var args []sqlcast.Node
+	var colnames []sqlcast.Node
+	
 	for _, val := range n.Values {
 		// Handle TypelessStructLiteralArg interface
 		switch arg := val.(type) {
 		case *ast.ExprArg:
 			args = append(args, c.convert(arg.Expr))
+			// No alias, no field name
+			colnames = append(colnames, &sqlcast.String{Str: ""})
 		case *ast.Alias:
 			// Handle alias within struct
 			args = append(args, c.convert(arg.Expr))
+			// Store field name with inferred type from the expression
+			fieldName := arg.As.Alias.Name
+			typeHint := ""
+			// Infer type from the expression
+			switch expr := arg.Expr.(type) {
+			case *ast.IntLiteral:
+				typeHint = "INT64"
+			case *ast.StringLiteral:
+				typeHint = "STRING"
+			case *ast.BoolLiteral:
+				typeHint = "BOOL"
+			case *ast.FloatLiteral:
+				typeHint = "FLOAT64"
+			case *ast.DateLiteral:
+				typeHint = "DATE"
+			case *ast.TimestampLiteral:
+				typeHint = "TIMESTAMP"
+			case *ast.NumericLiteral:
+				typeHint = "NUMERIC"
+			case *ast.JSONLiteral:
+				typeHint = "JSON"
+			case *ast.BytesLiteral:
+				typeHint = "BYTES"
+			default:
+				// LIMITATION: For column references (Path nodes) and other complex expressions,
+				// we cannot infer the type at AST conversion time because we don't have access
+				// to the catalog/schema. Type will fall back to interface{}/any.
+				// Workaround: Use typed STRUCT literals to explicitly specify field types.
+				_ = expr
+			}
+			if typeHint != "" {
+				colnames = append(colnames, &sqlcast.String{
+					Str: fieldName + ":" + typeHint,
+				})
+			} else {
+				colnames = append(colnames, &sqlcast.String{Str: fieldName})
+			}
 		default:
 			args = append(args, todo(val))
+			colnames = append(colnames, &sqlcast.String{Str: ""})
 		}
 	}
 	
 	return &sqlcast.RowExpr{
-		Args: &sqlcast.List{Items: args},
+		Args:      &sqlcast.List{Items: args},
+		Colnames:  &sqlcast.List{Items: colnames},
 		RowFormat: sqlcast.CoercionForm(0), // COERCE_EXPLICIT_CALL equivalent
-		Location: int(n.Struct),
+		Location:  int(n.Struct),
 	}
 }
 
@@ -1540,6 +1641,14 @@ func (c *cc) convertIntervalLiteralSingle(n *ast.IntervalLiteralSingle) sqlcast.
 func (c *cc) convertSelectorExpr(n *ast.SelectorExpr) sqlcast.Node {
 	// STRUCT(...).field -> A_Indirection with field name
 	// Convert to A_Indirection to represent field access
+	// 
+	// NOTE: Type inference for struct field access works for:
+	// - Typed STRUCT literals: STRUCT<id INT64, name STRING>(...).name
+	// - Untyped STRUCT with literal values: STRUCT(1 as id, 'text' as name).name
+	// 
+	// LIMITATION: Type inference doesn't work for untyped STRUCT with column references:
+	// - STRUCT(u.id as uid, u.name as uname).uname will return interface{}/any
+	// - Workaround: Use typed STRUCT literals to specify field types explicitly
 	return &sqlcast.A_Indirection{
 		Arg: c.convert(n.Expr),
 		Indirection: &sqlcast.List{

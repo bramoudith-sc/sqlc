@@ -130,14 +130,18 @@ func spannerType(req *plugin.GenerateRequest, options *opts.Options, col *plugin
 	case "interval":
 		// INTERVAL - Spanner supports INTERVAL type
 		// https://cloud.google.com/spanner/docs/reference/standard-sql/data-types#interval_type
-		// https://pkg.go.dev/cloud.google.com/go/spanner#Interval
-		if notNull {
-			// Use spanner.Interval for non-null INTERVAL type
-			// Note: spanner.Interval may not implement sql.Scanner
-			return "spanner.Interval"
-		}
-		// For nullable interval, use spanner.NullInterval
-		return "spanner.NullInterval"
+		// 
+		// By default, we use interface{} to avoid requiring the Spanner package dependency.
+		// Users can override this with spanner.Interval or spanner.NullInterval
+		// using the overrides configuration in sqlc.yaml:
+		//
+		// overrides:
+		//   - column: "table_name.interval_column"
+		//     go_type: "cloud.google.com/go/spanner.Interval"
+		//
+		// This approach keeps the generated code package-agnostic by default
+		// while allowing users to opt into the Spanner-specific types when needed.
+		return "interface{}"
 
 	case "any":
 		return "interface{}"

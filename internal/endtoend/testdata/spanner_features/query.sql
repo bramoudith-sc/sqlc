@@ -194,3 +194,52 @@ SELECT
 -- name: TestStructFieldAccess2 :one
 SELECT 
   STRUCT<id INT64, name STRING>(42, 'Alice').name as typed_name;
+
+-- name: TestStructFieldAccessInt :one
+SELECT 
+  STRUCT(1 as id, 'John' as name).id as person_id;
+
+-- name: TestStructFieldAccessTypedInt :one
+SELECT 
+  STRUCT<id INT64, name STRING, active BOOL>(42, 'Alice', true).id as typed_id;
+
+-- name: TestStructFieldAccessBool :one
+SELECT 
+  STRUCT<id INT64, name STRING, active BOOL>(42, 'Alice', true).active as is_active;
+
+-- name: TestStructFieldAccessFloat :one
+SELECT 
+  STRUCT<score FLOAT64, name STRING>(3.14, 'Pi').score as score_value;
+
+-- name: TestStructFieldAccessDate :one
+SELECT 
+  STRUCT<created DATE, name STRING>(DATE '2024-01-01', 'Test').created as created_date;
+
+-- name: TestStructFieldAccessAny :one
+SELECT 
+  STRUCT(1 as id, 'John' as name).unknown_field as unknown;
+
+-- Test STRUCT with table column references
+-- name: TestStructWithTableColumns :one
+SELECT 
+  STRUCT(u.id as user_id, u.name as user_name).user_name as name_from_struct
+FROM users u
+WHERE u.id = @user_id;
+
+-- name: TestStructWithTableColumnsInt :one
+SELECT 
+  STRUCT(u.id as uid, u.score as uscore).uscore as score_from_struct
+FROM users u
+WHERE u.id = @user_id;
+
+-- name: TestTypedStructWithTableColumns :one
+SELECT 
+  STRUCT<uid STRING, uname STRING>(u.id, u.name).uname as typed_name
+FROM users u
+WHERE u.id = @user_id;
+
+-- name: TestMixedStruct :one
+SELECT 
+  STRUCT(u.id as uid, 'fixed' as fixed_val, u.score as uscore).uscore as mixed_score
+FROM users u
+WHERE u.id = @user_id;
