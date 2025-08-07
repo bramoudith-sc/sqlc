@@ -1,6 +1,8 @@
 package spanner
 
 import (
+	"strings"
+	
 	"github.com/sqlc-dev/sqlc/internal/sql/ast"
 	"github.com/sqlc-dev/sqlc/internal/sql/catalog"
 )
@@ -1203,8 +1205,10 @@ func defaultSchema(name string) *catalog.Schema {
 	copy(baseFuncs, s.Funcs)
 	
 	for _, fn := range baseFuncs {
-		// Skip functions that already have SAFE in the name or are SAFE_* arithmetic functions
-		if len(fn.Name) >= 4 && fn.Name[:4] == "SAFE" {
+		// Skip functions that already have SAFE. prefix (avoid SAFE.SAFE.function)
+		// Note: SAFE_* functions (like SAFE_ADD, SAFE_DIVIDE) are different from SAFE. prefix
+		// and can have their own SAFE. versions (e.g., SAFE.SAFE_DIVIDE is valid)
+		if strings.HasPrefix(fn.Name, "SAFE.") {
 			continue
 		}
 		// Skip aggregate functions (they don't have SAFE. versions)
