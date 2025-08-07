@@ -18,6 +18,7 @@ This is the sqlc project with a Cloud Spanner engine implementation using the me
 
 ### General Guidelines
 - **No emojis**: Do not use emojis in code, comments, or documentation
+- **Git safety**: Always use `git status` before `git commit` to review changes. Never use `git add -A` followed by immediate commit
 
 ### AST Traversal
 - Use `ast.Preorder` for simple traversals (cleaner with range-over-func)
