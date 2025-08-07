@@ -169,6 +169,8 @@ func (c *cc) convert(n ast.Node) sqlcast.Node {
 		return c.convertIndexExpr(node)
 	case *ast.SelectorExpr:
 		return c.convertSelectorExpr(node)
+	case *ast.Unnest:
+		return c.convertUnnest(node)
 
 	// Other nodes
 	case *ast.Star:
@@ -403,6 +405,27 @@ func (c *cc) convertSelect(n *ast.Select) *sqlcast.SelectStmt {
 		LimitCount:  nil,                                    // Can be nil - scalar value
 		LimitOffset: nil,                                    // Can be nil - scalar value
 		ValuesLists: nil,                                    // Can be nil - only for VALUES queries
+	}
+
+	// Handle SELECT AS STRUCT / AS VALUE modifiers
+	// AS STRUCT returns a single STRUCT containing all selected columns
+	// AS VALUE returns a single scalar value (must select exactly one column)
+	if n.As != nil {
+		switch n.As.(type) {
+		case *ast.AsStruct:
+			// TODO: SELECT AS STRUCT needs special handling
+			// It should return a single STRUCT column containing all selected fields
+			// For now, we'll process it as a regular SELECT
+			if debug.Active {
+				log.Printf("spanner.convertSelect: SELECT AS STRUCT not fully implemented\n")
+			}
+		case *ast.AsValue:
+			// TODO: SELECT AS VALUE needs validation (must have exactly one column)
+			// It returns the single selected value directly instead of a row
+			if debug.Active {
+				log.Printf("spanner.convertSelect: SELECT AS VALUE not fully implemented\n")
+			}
+		}
 	}
 
 	// Convert SELECT items
@@ -680,8 +703,11 @@ func (c *cc) convertTableExpr(n ast.TableExpr) sqlcast.Node {
 			}
 		}
 		return subquery
+	case *ast.Unnest:
+		// Handle UNNEST in FROM clause
+		return c.convertUnnest(t)
 	default:
-		return todo("convertQueryExpr", n)
+		return todo("convertTableExpr", n)
 	}
 }
 
@@ -1664,6 +1690,49 @@ func (c *cc) convertSelectorExpr(n *ast.SelectorExpr) sqlcast.Node {
 			},
 		},
 	}
+}
+
+func (c *cc) convertUnnest(n *ast.Unnest) sqlcast.Node {
+	// UNNEST converts an array to a table-valued function result
+	// It can be used in FROM clause with optional WITH OFFSET
+	
+	// Convert to RangeFunction for use in FROM clause
+	rangeFunc := &sqlcast.RangeFunction{
+		Functions: &sqlcast.List{
+			Items: []sqlcast.Node{
+				&sqlcast.List{
+					Items: []sqlcast.Node{
+						&sqlcast.FuncCall{
+							Func: &sqlcast.FuncName{
+								Names: &sqlcast.List{
+									Items: []sqlcast.Node{
+										&sqlcast.String{Str: "unnest"},
+									},
+								},
+							},
+							Args: &sqlcast.List{
+								Items: []sqlcast.Node{
+									c.convert(n.Expr),
+								},
+							},
+						},
+						// TODO: Handle n.WithOffset for WITH OFFSET clause
+						// This would add an ordinality column to the result
+					},
+				},
+			},
+		},
+	}
+	
+	// Handle alias if present
+	if n.As != nil && n.As.Alias != nil {
+		alias := identifier(n.As.Alias.Name)
+		rangeFunc.Alias = &sqlcast.Alias{
+			Aliasname: &alias,
+		}
+	}
+	
+	return rangeFunc
 }
 
 func (c *cc) convertIndexExpr(n *ast.IndexExpr) sqlcast.Node {
