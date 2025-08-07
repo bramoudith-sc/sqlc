@@ -2,7 +2,7 @@ package spanner
 
 import (
 	"strings"
-	
+
 	"github.com/sqlc-dev/sqlc/internal/sql/ast"
 	"github.com/sqlc-dev/sqlc/internal/sql/catalog"
 )
@@ -1147,7 +1147,7 @@ func defaultSchema(name string) *catalog.Schema {
 			ReturnType:         &ast.TypeName{Name: "numeric"},
 			ReturnTypeNullable: true,
 		},
-		
+
 		{
 			Name: "NET.IPV4_TO_INT64",
 			Args: []*catalog.Argument{
@@ -1203,7 +1203,7 @@ func defaultSchema(name string) *catalog.Schema {
 	// SAFE. prefix makes functions return NULL instead of raising errors
 	baseFuncs := make([]*catalog.Function, len(s.Funcs))
 	copy(baseFuncs, s.Funcs)
-	
+
 	for _, fn := range baseFuncs {
 		// Skip functions that already have SAFE. prefix (avoid SAFE.SAFE.function)
 		// Note: SAFE_* functions (like SAFE_ADD, SAFE_DIVIDE) are different from SAFE. prefix
@@ -1215,7 +1215,7 @@ func defaultSchema(name string) *catalog.Schema {
 		if isAggregateFunction(fn.Name) {
 			continue
 		}
-		
+
 		// Create SAFE. version (works for both regular and namespaced functions)
 		safeFn := &catalog.Function{
 			Name:               "SAFE." + fn.Name,

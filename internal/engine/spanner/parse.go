@@ -42,20 +42,20 @@ func (p *Parser) splitStatements(filename, content string) ([]statementWithMetad
 			Buffer:   content,
 		},
 	}
-	
+
 	var statements []statementWithMetadata
 	var currentComments []string
 	var stmtStartPos token.Pos = -1
 	var firstTokenPos token.Pos = -1
-	
+
 	for {
 		err := lexer.NextToken()
 		if err != nil {
 			return nil, convertError(err)
 		}
-		
+
 		tok := lexer.Token
-		
+
 		// Collect comments from this token
 		if len(tok.Comments) > 0 {
 			for _, comment := range tok.Comments {
@@ -67,7 +67,7 @@ func (p *Parser) splitStatements(filename, content string) ([]statementWithMetad
 				}
 			}
 		}
-		
+
 		// Track the first non-semicolon token position for SQL extraction
 		if tok.Kind != ";" && tok.Kind != token.TokenEOF && firstTokenPos == -1 {
 			firstTokenPos = tok.Pos
@@ -76,21 +76,21 @@ func (p *Parser) splitStatements(filename, content string) ([]statementWithMetad
 				stmtStartPos = tok.Pos
 			}
 		}
-		
+
 		// Check for statement terminator (semicolon or EOF)
 		if tok.Kind == ";" || tok.Kind == token.TokenEOF {
 			// Add statement if we have content
 			if firstTokenPos != -1 && stmtStartPos != -1 {
 				stmtSQL := content[firstTokenPos:tok.Pos]
 				stmtSQL = strings.TrimSpace(stmtSQL)
-				
+
 				if stmtSQL != "" {
 					// For semicolon, include it in endPos; for EOF, use tok.Pos
 					endPos := tok.Pos
 					if tok.Kind == ";" {
 						endPos = tok.End
 					}
-					
+
 					statements = append(statements, statementWithMetadata{
 						sql:         stmtSQL,
 						sqlStartPos: firstTokenPos,
@@ -100,19 +100,19 @@ func (p *Parser) splitStatements(filename, content string) ([]statementWithMetad
 					})
 				}
 			}
-			
+
 			// If EOF, we're done
 			if tok.Kind == token.TokenEOF {
 				break
 			}
-			
+
 			// Reset for next statement (only for semicolon)
 			currentComments = nil
 			stmtStartPos = -1
 			firstTokenPos = -1
 		}
 	}
-	
+
 	return statements, nil
 }
 
@@ -123,27 +123,27 @@ func (p *Parser) Parse(r io.Reader) ([]sqlcast.Statement, error) {
 	}
 
 	content := string(blob)
-	
+
 	// Split statements using Lexer
 	statements, err := p.splitStatements("<input>", content)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var stmts []sqlcast.Statement
-	
+
 	for _, stmt := range statements {
 		// Skip empty statements
 		if strings.TrimSpace(stmt.sql) == "" {
 			continue
 		}
-		
+
 		// Parse the SQL statement
 		node, err := memefish.ParseStatement("<input>", stmt.sql)
 		if err != nil {
 			return nil, convertError(err)
 		}
-		
+
 		converter := &cc{
 			paramMap:    make(map[string]int),
 			paramsByNum: make(map[int]string),
@@ -154,7 +154,7 @@ func (p *Parser) Parse(r io.Reader) ([]sqlcast.Statement, error) {
 		if _, ok := out.(*sqlcast.TODO); ok {
 			continue
 		}
-		
+
 		stmts = append(stmts, sqlcast.Statement{
 			Raw: &sqlcast.RawStmt{
 				Stmt:         out,
@@ -163,7 +163,7 @@ func (p *Parser) Parse(r io.Reader) ([]sqlcast.Statement, error) {
 			},
 		})
 	}
-	
+
 	return stmts, nil
 }
 
@@ -181,7 +181,7 @@ func convertError(err error) error {
 	if err == nil {
 		return nil
 	}
-	
+
 	// Check if it's a memefish.Error type
 	if memefishErr, ok := err.(*memefish.Error); ok {
 		line := 1
@@ -198,7 +198,7 @@ func convertError(err error) error {
 			Column:  col,
 		}
 	}
-	
+
 	// Check if it's a memefish.MultiError type
 	if multiErr, ok := err.(*memefish.MultiError); ok {
 		if len(*multiErr) > 0 {
@@ -217,7 +217,7 @@ func convertError(err error) error {
 			}
 		}
 	}
-	
+
 	// For other error types, wrap as-is
 	return fmt.Errorf("spanner parser error: %w", err)
 }

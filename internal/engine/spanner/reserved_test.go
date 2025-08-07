@@ -6,7 +6,7 @@ import (
 
 func TestIsReservedKeyword(t *testing.T) {
 	p := &Parser{}
-	
+
 	tests := []struct {
 		input    string
 		expected bool
@@ -104,7 +104,7 @@ func TestIsReservedKeyword(t *testing.T) {
 		{"ENUM", true},
 		{"DEFINE", true},
 		{"ASSERT_ROWS_MODIFIED", true},
-		
+
 		// Context-dependent keywords (can be used as identifiers)
 		// These are recognized as keywords only in specific contexts
 		{"INSERT", false},
@@ -130,24 +130,24 @@ func TestIsReservedKeyword(t *testing.T) {
 		{"VALUE", false},
 		{"VALUES", false},
 		{"OFFSET", false}, // OFFSET is context-dependent in Spanner
-		
+
 		// Non-reserved words (should be identifiers)
 		{"mycolumn", false},
 		{"user_id", false},
 		{"customer_name", false},
 		{"order_date", false},
 		{"_underscore", false},
-		
+
 		// Multi-word strings (not single keywords)
 		{"SELECT FROM", false},
 		{"ORDER BY", false},
-		
+
 		// Empty or invalid
 		{"", false},
 		{"123", false},
 		{"@param", false},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			result := p.IsReservedKeyword(tt.input)

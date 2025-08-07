@@ -2,20 +2,19 @@
 //
 // Key architectural decisions:
 //
-// 1. List initialization: All sqlcast.List fields that are walked by the compiler must be initialized
-//    with empty Items arrays, not nil. The compiler's Walk function expects to iterate over these lists
-//    and will panic on nil. Fields that are conditionally accessed (like WhereClause) can be nil.
+//  1. List initialization: All sqlcast.List fields that are walked by the compiler must be initialized
+//     with empty Items arrays, not nil. The compiler's Walk function expects to iterate over these lists
+//     and will panic on nil. Fields that are conditionally accessed (like WhereClause) can be nil.
 //
-// 2. Star (*) handling: Spanner's Star nodes must be wrapped in ColumnRef to match PostgreSQL's AST
-//    structure. This wrapping is critical for the compiler's hasStarRef() and column expansion logic
-//    to work correctly. The pattern is: ResTarget -> ColumnRef -> A_Star.
+//  2. Star (*) handling: Spanner's Star nodes must be wrapped in ColumnRef to match PostgreSQL's AST
+//     structure. This wrapping is critical for the compiler's hasStarRef() and column expansion logic
+//     to work correctly. The pattern is: ResTarget -> ColumnRef -> A_Star.
 //
-// 3. THEN RETURN conversion: Spanner's THEN RETURN clause is converted to PostgreSQL's RETURNING
-//    clause, maintaining the same AST structure patterns (especially for Star nodes).
+//  3. THEN RETURN conversion: Spanner's THEN RETURN clause is converted to PostgreSQL's RETURNING
+//     clause, maintaining the same AST structure patterns (especially for Star nodes).
 //
-// 4. Function names: Spanner supports namespaced functions (e.g., NET.IPV4_TO_INT64, SAFE.DIVIDE).
-//    All path components are joined with dots to preserve the full function name for resolution.
-//
+//  4. Function names: Spanner supports namespaced functions (e.g., NET.IPV4_TO_INT64, SAFE.DIVIDE).
+//     All path components are joined with dots to preserve the full function name for resolution.
 package spanner
 
 import (
@@ -129,7 +128,7 @@ func (c *cc) convertCreateTable(n *ast.CreateTable) *sqlcast.CreateTableStmt {
 		Name:        parseTableName(n.Name),
 		Cols:        []*sqlcast.ColumnDef{},
 	}
-	
+
 	// Convert columns
 	for _, col := range n.Columns {
 		typeName := c.convertSchemaType(col.Type)
@@ -147,7 +146,7 @@ func (c *cc) convertCreateTable(n *ast.CreateTable) *sqlcast.CreateTableStmt {
 		}
 		stmt.Cols = append(stmt.Cols, colDef)
 	}
-	
+
 	// TODO: Convert table constraints and other features
 	return stmt
 }
@@ -223,11 +222,11 @@ func (c *cc) convertUpdate(n *ast.Update) *sqlcast.UpdateStmt {
 			// Only convert if it's an expression, not DEFAULT keyword
 			value = c.convert(item.DefaultExpr.Expr)
 		}
-		
+
 		if len(item.Path) > 0 && value != nil {
 			// Get the column name from the path
 			colName := item.Path[len(item.Path)-1].Name
-			
+
 			// Create ResTarget for the update
 			stmt.TargetList.Items = append(stmt.TargetList.Items, &sqlcast.ResTarget{
 				Name: &colName,
@@ -284,7 +283,7 @@ func (c *cc) convertQueryStatement(n *ast.QueryStatement) sqlcast.Node {
 func (c *cc) convertQuery(n *ast.Query) sqlcast.Node {
 	// Query contains the actual SELECT with ORDER BY and LIMIT
 	var baseStmt *sqlcast.SelectStmt
-	
+
 	// Convert the inner query expression
 	if n.Query != nil {
 		if stmt, ok := c.convert(n.Query).(*sqlcast.SelectStmt); ok {
@@ -296,12 +295,12 @@ func (c *cc) convertQuery(n *ast.Query) sqlcast.Node {
 	} else {
 		baseStmt = &sqlcast.SelectStmt{}
 	}
-	
+
 	// Add ORDER BY
 	if n.OrderBy != nil {
 		baseStmt.SortClause = c.convertOrderBy(n.OrderBy)
 	}
-	
+
 	// Add LIMIT
 	if n.Limit != nil {
 		baseStmt.LimitCount = c.convert(n.Limit.Count)
@@ -309,12 +308,12 @@ func (c *cc) convertQuery(n *ast.Query) sqlcast.Node {
 			baseStmt.LimitOffset = c.convert(n.Limit.Offset)
 		}
 	}
-	
+
 	// Handle WITH clause
 	if n.With != nil {
 		baseStmt.WithClause = c.convertWithClause(n.With)
 	}
-	
+
 	return baseStmt
 }
 
@@ -324,14 +323,14 @@ func (c *cc) convertSelect(n *ast.Select) *sqlcast.SelectStmt {
 		// The compiler's Walk function will panic if it encounters a nil List where
 		// it expects to iterate. This is a key difference from other AST nodes that
 		// can be nil (like WhereClause, which is checked before use).
-		TargetList:   &sqlcast.List{Items: []sqlcast.Node{}}, // SELECT items - always walked
-		FromClause:   &sqlcast.List{Items: []sqlcast.Node{}}, // FROM tables - always walked
-		WhereClause:  nil, // Can be nil - conditionally accessed
-		GroupClause:  nil, // Can be nil - only set if GROUP BY exists
-		SortClause:   nil, // Can be nil - only set if ORDER BY exists  
-		LimitCount:   nil, // Can be nil - scalar value
-		LimitOffset:  nil, // Can be nil - scalar value
-		ValuesLists:  nil, // Can be nil - only for VALUES queries
+		TargetList:  &sqlcast.List{Items: []sqlcast.Node{}}, // SELECT items - always walked
+		FromClause:  &sqlcast.List{Items: []sqlcast.Node{}}, // FROM tables - always walked
+		WhereClause: nil,                                    // Can be nil - conditionally accessed
+		GroupClause: nil,                                    // Can be nil - only set if GROUP BY exists
+		SortClause:  nil,                                    // Can be nil - only set if ORDER BY exists
+		LimitCount:  nil,                                    // Can be nil - scalar value
+		LimitOffset: nil,                                    // Can be nil - scalar value
+		ValuesLists: nil,                                    // Can be nil - only for VALUES queries
 	}
 
 	// Convert SELECT items
@@ -366,7 +365,7 @@ func (c *cc) convertSelect(n *ast.Select) *sqlcast.SelectStmt {
 			// For simple column references wrapped in ExprSelectItem, extract the name
 			var colName *string
 			var val sqlcast.Node
-			
+
 			if exprItem, ok := item.(*ast.ExprSelectItem); ok {
 				// Extract the expression from the wrapper
 				if ident, ok := exprItem.Expr.(*ast.Ident); ok {
@@ -382,7 +381,7 @@ func (c *cc) convertSelect(n *ast.Select) *sqlcast.SelectStmt {
 				// Fallback for other types
 				val = c.convert(item)
 			}
-			
+
 			stmt.TargetList.Items = append(stmt.TargetList.Items, &sqlcast.ResTarget{
 				Name: colName,
 				Val:  val,
@@ -486,7 +485,7 @@ func (c *cc) convertCallExpr(n *ast.CallExpr) *sqlcast.FuncCall {
 		}
 		funcName = strings.Join(parts, ".")
 	}
-	
+
 	funcCall := &sqlcast.FuncCall{
 		Func: &sqlcast.FuncName{
 			Name: funcName,
@@ -511,7 +510,7 @@ func (c *cc) convertCallExpr(n *ast.CallExpr) *sqlcast.FuncCall {
 func (c *cc) convertParam(n *ast.Param) sqlcast.Node {
 	// For Spanner, we track parameters by name
 	paramName := n.Name
-	
+
 	// Check if we've seen this parameter before
 	if num, exists := c.paramMap[paramName]; exists {
 		return &sqlcast.ParamRef{
@@ -519,12 +518,12 @@ func (c *cc) convertParam(n *ast.Param) sqlcast.Node {
 			Location: int(n.Pos()),
 		}
 	}
-	
+
 	// New parameter - assign it a number
 	c.paramCount++
 	c.paramMap[paramName] = c.paramCount
 	c.paramsByNum[c.paramCount] = paramName
-	
+
 	return &sqlcast.ParamRef{
 		Number:   c.paramCount,
 		Location: int(n.Pos()),
@@ -579,19 +578,19 @@ func (c *cc) convertWithClause(n *ast.With) *sqlcast.WithClause {
 	clause := &sqlcast.WithClause{
 		Ctes: &sqlcast.List{Items: []sqlcast.Node{}},
 	}
-	
+
 	for _, cte := range n.CTEs {
 		name := cte.Name.Name
 		commonTableExpr := &sqlcast.CommonTableExpr{
 			Ctename:  &name,
 			Ctequery: c.convert(cte.QueryExpr),
 		}
-		
+
 		// TODO: Handle column aliases when available in memefish API
-		
+
 		clause.Ctes.Items = append(clause.Ctes.Items, commonTableExpr)
 	}
-	
+
 	return clause
 }
 

@@ -15,7 +15,7 @@ type Parameter struct {
 // Uses ast.Preorder for cleaner, more idiomatic implementation
 func ExtractParameters(node ast.Node) []Parameter {
 	var params []Parameter
-	
+
 	for n := range ast.Preorder(node) {
 		if param, ok := n.(*ast.Param); ok {
 			params = append(params, Parameter{
@@ -24,6 +24,6 @@ func ExtractParameters(node ast.Node) []Parameter {
 			})
 		}
 	}
-	
+
 	return params
 }
