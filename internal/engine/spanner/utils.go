@@ -11,36 +11,20 @@ type Parameter struct {
 	Position token.Pos
 }
 
-// parameterExtractor implements ast.Visitor to collect parameters
-type parameterExtractor struct {
-	params []Parameter
-}
-
-func (e *parameterExtractor) Visit(node ast.Node) ast.Visitor {
-	if param, ok := node.(*ast.Param); ok {
-		e.params = append(e.params, Parameter{
-			Name:     param.Name,
-			Position: param.Pos(),
-		})
-	}
-	return e
-}
-
-func (e *parameterExtractor) VisitMany(nodes []ast.Node) ast.Visitor {
-	return e
-}
-
-func (e *parameterExtractor) Field(name string) ast.Visitor {
-	return e
-}
-
-func (e *parameterExtractor) Index(index int) ast.Visitor {
-	return e
-}
-
 // ExtractParameters extracts all @param style parameters from an AST node
+// Uses ast.Inspect for simpler implementation
 func ExtractParameters(node ast.Node) []Parameter {
-	extractor := &parameterExtractor{}
-	ast.Walk(node, extractor)
-	return extractor.params
+	var params []Parameter
+	
+	ast.Inspect(node, func(n ast.Node) bool {
+		if param, ok := n.(*ast.Param); ok {
+			params = append(params, Parameter{
+				Name:     param.Name,
+				Position: param.Pos(),
+			})
+		}
+		return true // Continue traversing
+	})
+	
+	return params
 }

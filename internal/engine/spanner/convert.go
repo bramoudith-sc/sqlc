@@ -474,6 +474,12 @@ func (c *cc) convertCallExpr(n *ast.CallExpr) *sqlcast.FuncCall {
 		// Join all identifiers with dots to support namespaced functions.
 		// Examples: NET.IPV4_TO_INT64, SAFE.DIVIDE, SAFE.NET.IPV4_TO_INT64
 		// This preserves the full function path for proper resolution.
+		//
+		// NOTE: Function names are preserved as-is (not lowercased) here.
+		// Case-insensitive matching happens later in the catalog lookup
+		// (see internal/sql/catalog/public.go:ListFuncsByName which lowercases
+		// the name for comparison). This allows the original case to be preserved
+		// in generated code while still supporting case-insensitive SQL.
 		var parts []string
 		for _, ident := range n.Func.Idents {
 			parts = append(parts, ident.Name)
