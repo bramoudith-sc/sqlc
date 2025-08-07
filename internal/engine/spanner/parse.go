@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/cloudspannerecosystem/memefish"
+	"github.com/cloudspannerecosystem/memefish/token"
 
 	"github.com/sqlc-dev/sqlc/internal/source"
 	sqlcast "github.com/sqlc-dev/sqlc/internal/sql/ast"
@@ -24,6 +25,105 @@ func NewParser() *Parser {
 
 type Parser struct{}
 
+// statementWithMetadata represents a SQL statement with its metadata comments
+type statementWithMetadata struct {
+	sql         string    // The SQL statement text (without comments)
+	sqlStartPos token.Pos // Start position of actual SQL (for offset calculation)
+	startPos    token.Pos // Start position including metadata comments
+	endPos      token.Pos // End position including semicolon
+	comments    []string  // Comments preceding the statement
+}
+
+// splitStatements splits SQL text into statements using Lexer directly
+func (p *Parser) splitStatements(filename, content string) ([]statementWithMetadata, error) {
+	lexer := &memefish.Lexer{
+		File: &token.File{
+			FilePath: filename,
+			Buffer:   content,
+		},
+	}
+	
+	var statements []statementWithMetadata
+	var currentComments []string
+	var stmtStartPos token.Pos = -1
+	var firstTokenPos token.Pos = -1
+	
+	for {
+		err := lexer.NextToken()
+		if err != nil {
+			return nil, convertError(err)
+		}
+		
+		tok := lexer.Token
+		
+		// Collect comments from this token
+		if len(tok.Comments) > 0 {
+			for _, comment := range tok.Comments {
+				commentText := content[comment.Pos:comment.End]
+				currentComments = append(currentComments, commentText)
+				// Track the earliest position including comments
+				if stmtStartPos == -1 || comment.Pos < stmtStartPos {
+					stmtStartPos = comment.Pos
+				}
+			}
+		}
+		
+		// Handle EOF
+		if tok.Kind == token.TokenEOF {
+			// Add any remaining statement
+			if firstTokenPos != -1 && stmtStartPos != -1 {
+				stmtSQL := content[firstTokenPos:tok.Pos]
+				stmtSQL = strings.TrimSpace(stmtSQL)
+				if stmtSQL != "" {
+					statements = append(statements, statementWithMetadata{
+						sql:         stmtSQL,
+						sqlStartPos: firstTokenPos,
+						startPos:    stmtStartPos,
+						endPos:      tok.Pos,
+						comments:    currentComments,
+					})
+				}
+			}
+			break
+		}
+		
+		// Track the first non-semicolon token position for SQL extraction
+		if tok.Kind != ";" && firstTokenPos == -1 {
+			firstTokenPos = tok.Pos
+			// If we haven't seen any comments yet, start from this token
+			if stmtStartPos == -1 {
+				stmtStartPos = tok.Pos
+			}
+		}
+		
+		// Check for statement terminator
+		if tok.Kind == ";" {
+			if firstTokenPos != -1 {
+				// Extract the SQL statement (without leading comments, without trailing semicolon)
+				stmtSQL := content[firstTokenPos:tok.Pos]
+				stmtSQL = strings.TrimSpace(stmtSQL)
+				
+				if stmtSQL != "" {
+					statements = append(statements, statementWithMetadata{
+						sql:         stmtSQL,
+						sqlStartPos: firstTokenPos,
+						startPos:    stmtStartPos,
+						endPos:      tok.End, // Include the semicolon
+						comments:    currentComments,
+					})
+				}
+				
+				// Reset for next statement
+				currentComments = nil
+				stmtStartPos = -1
+				firstTokenPos = -1
+			}
+		}
+	}
+	
+	return statements, nil
+}
+
 func (p *Parser) Parse(r io.Reader) ([]sqlcast.Statement, error) {
 	blob, err := io.ReadAll(r)
 	if err != nil {
@@ -32,115 +132,22 @@ func (p *Parser) Parse(r io.Reader) ([]sqlcast.Statement, error) {
 
 	content := string(blob)
 	
-	// First split raw statements
-	rawStatements, err := memefish.SplitRawStatements("<input>", content)
+	// Split statements using Lexer
+	statements, err := p.splitStatements("<input>", content)
 	if err != nil {
-		return nil, convertError(err)
+		return nil, err
 	}
 	
 	var stmts []sqlcast.Statement
 	
-	// Process each statement and look for metadata comments before it
-	for i, rawStmt := range rawStatements {
-		if rawStmt == nil || rawStmt.Statement == "" {
-			continue
-		}
-		
+	for _, stmt := range statements {
 		// Skip empty statements
-		trimmed := strings.TrimSpace(rawStmt.Statement)
-		if trimmed == "" {
+		if strings.TrimSpace(stmt.sql) == "" {
 			continue
 		}
 		
-		// Check if this statement has SQL (not just comments)
-		hasSQL := false
-		for _, line := range strings.Split(rawStmt.Statement, "\n") {
-			trimmedLine := strings.TrimSpace(line)
-			if trimmedLine != "" && !strings.HasPrefix(trimmedLine, "--") {
-				hasSQL = true
-				break
-			}
-		}
-		if !hasSQL {
-			continue
-		}
-		
-		// Find the start position including any metadata comment
-		stmtStart := int(rawStmt.Pos)
-		
-		// Look backwards from the statement start to find metadata comments
-		if stmtStart > 0 {
-			// Look for metadata comment in the lines immediately before the statement
-			searchEnd := stmtStart
-			searchStart := stmtStart - 1
-			
-			// Find start of the line or lines before the statement
-			lineCount := 0
-			for searchStart > 0 && lineCount < 5 { // Look up to 5 lines back
-				if content[searchStart] == '\n' {
-					lineCount++
-				}
-				searchStart--
-			}
-			
-			// Extract the text before the statement
-			beforeText := content[searchStart:searchEnd]
-			
-			// Look for the last occurrence of "-- name:" in this text
-			if idx := strings.LastIndex(beforeText, "-- name:"); idx >= 0 {
-				// Find the start of the line containing "-- name:"
-				lineStart := searchStart + idx
-				for lineStart > 0 && lineStart > searchStart && content[lineStart-1] != '\n' {
-					lineStart--
-				}
-				stmtStart = lineStart
-			}
-		}
-		
-		// Calculate the full statement including metadata
-		stmtEnd := int(rawStmt.End)
-		if i < len(rawStatements)-1 && rawStatements[i+1] != nil {
-			// Check if there's a semicolon between statements
-			nextStart := int(rawStatements[i+1].Pos)
-			for j := stmtEnd; j < nextStart && j < len(content); j++ {
-				if content[j] == ';' {
-					stmtEnd = j + 1
-					break
-				} else if content[j] != ' ' && content[j] != '\t' && content[j] != '\n' && content[j] != '\r' {
-					break
-				}
-			}
-		} else {
-			// Last statement, check for trailing semicolon
-			for j := stmtEnd; j < len(content); j++ {
-				if content[j] == ';' {
-					stmtEnd = j + 1
-					break
-				} else if content[j] != ' ' && content[j] != '\t' && content[j] != '\n' && content[j] != '\r' {
-					break
-				}
-			}
-		}
-		
-		// Extract the full statement text
-		fullStatement := content[stmtStart:stmtEnd]
-		
-		// Find where the actual SQL starts within the full statement
-		sqlStartOffset := 0
-		for _, line := range strings.Split(fullStatement, "\n") {
-			trimmedLine := strings.TrimSpace(line)
-			if trimmedLine != "" && !strings.HasPrefix(trimmedLine, "--") {
-				sqlStartOffset = strings.Index(fullStatement, line)
-				break
-			}
-		}
-		
-		// Parse just the SQL portion
-		sqlOnly := fullStatement[sqlStartOffset:]
-		// Remove trailing semicolon for parsing
-		sqlOnly = strings.TrimRight(sqlOnly, "; \t\n\r")
-		
-		node, err := memefish.ParseStatement("<input>", sqlOnly)
+		// Parse the SQL statement
+		node, err := memefish.ParseStatement("<input>", stmt.sql)
 		if err != nil {
 			return nil, convertError(err)
 		}
@@ -148,8 +155,8 @@ func (p *Parser) Parse(r io.Reader) ([]sqlcast.Statement, error) {
 		converter := &cc{
 			paramMap:    make(map[string]int),
 			paramsByNum: make(map[int]string),
-			// Offset to adjust positions from sqlOnly to original file positions
-			positionOffset: stmtStart + sqlStartOffset,
+			// Offset to adjust positions from parsed SQL to original file positions
+			positionOffset: int(stmt.sqlStartPos),
 		}
 		out := converter.convert(node)
 		if _, ok := out.(*sqlcast.TODO); ok {
@@ -159,8 +166,8 @@ func (p *Parser) Parse(r io.Reader) ([]sqlcast.Statement, error) {
 		stmts = append(stmts, sqlcast.Statement{
 			Raw: &sqlcast.RawStmt{
 				Stmt:         out,
-				StmtLocation: stmtStart,
-				StmtLen:      stmtEnd - stmtStart,
+				StmtLocation: int(stmt.startPos), // Already includes metadata comments
+				StmtLen:      int(stmt.endPos) - int(stmt.startPos),
 			},
 		})
 	}
@@ -200,9 +207,25 @@ func convertError(err error) error {
 		}
 	}
 	
-	// MultiError might not exist or have different structure
-	// For now, just handle generic errors
+	// Check if it's a memefish.MultiError type
+	if multiErr, ok := err.(*memefish.MultiError); ok {
+		if len(*multiErr) > 0 {
+			firstErr := (*multiErr)[0]
+			line := 1
+			col := 1
+			if firstErr.Position != nil {
+				line = firstErr.Position.Line + 1
+				col = firstErr.Position.Column + 1
+			}
+			return &sqlerr.Error{
+				Message: "syntax error",
+				Err:     errors.New(firstErr.Message),
+				Line:    line,
+				Column:  col,
+			}
+		}
+	}
 	
-	// Generic error
-	return fmt.Errorf("parse error: %v", err)
+	// For other error types, wrap as-is
+	return fmt.Errorf("spanner parser error: %w", err)
 }
