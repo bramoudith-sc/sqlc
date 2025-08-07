@@ -11,12 +11,19 @@
 
 ### Query Features
 - WITH clause (Common Table Expressions)
-- JOINs (INNER, LEFT, RIGHT, FULL)
-- Subqueries (scalar, EXISTS, IN, array)
+- JOINs (INNER, LEFT, RIGHT, FULL, CROSS)
 - GROUP BY and HAVING
 - ORDER BY
 - LIMIT and OFFSET
 - UNION/INTERSECT/EXCEPT
+
+### Subquery Support
+- Scalar subqueries in expressions
+- EXISTS subqueries for existence checks
+- IN subqueries for set membership
+- ARRAY subqueries for array construction
+- Table subqueries in FROM clause
+- Correlated subqueries (reference outer query columns)
 
 ### Functions and Operators
 - Arithmetic operators (+, -, *, /)
@@ -119,7 +126,13 @@
 
 3. **DDL Support**: Limited to basic CREATE/DROP TABLE
 
-4. **Error Messages**: Some error messages could be more descriptive
+4. **DotStar Column Expansion**: Currently generates interface{} instead of expanding to actual table columns
+   - Regular SELECT * works correctly
+   - table.* syntax is parsed but not fully expanded
+
+5. **SELECT * EXCEPT/REPLACE**: Detected but not fully implemented for column filtering
+
+6. **Error Messages**: Some error messages could be more descriptive
 
 ## Future Improvements
 
