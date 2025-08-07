@@ -12,19 +12,18 @@ type Parameter struct {
 }
 
 // ExtractParameters extracts all @param style parameters from an AST node
-// Uses ast.Inspect for simpler implementation
+// Uses ast.Preorder for cleaner, more idiomatic implementation
 func ExtractParameters(node ast.Node) []Parameter {
 	var params []Parameter
 	
-	ast.Inspect(node, func(n ast.Node) bool {
+	for n := range ast.Preorder(node) {
 		if param, ok := n.(*ast.Param); ok {
 			params = append(params, Parameter{
 				Name:     param.Name,
 				Position: param.Pos(),
 			})
 		}
-		return true // Continue traversing
-	})
+	}
 	
 	return params
 }
