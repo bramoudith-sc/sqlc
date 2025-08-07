@@ -16,6 +16,9 @@ This is the sqlc project with a Cloud Spanner engine implementation using the me
 
 ## Code Style Guidelines
 
+### General Guidelines
+- **No emojis**: Do not use emojis in code, comments, or documentation
+
 ### AST Traversal
 - Use `ast.Preorder` for simple traversals (cleaner with range-over-func)
 - Use `ast.Inspect` only when you need to skip subtrees with `return false`

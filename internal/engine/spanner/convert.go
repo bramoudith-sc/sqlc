@@ -435,6 +435,23 @@ func (c *cc) convertSelect(n *ast.Select) *sqlcast.SelectStmt {
 			// SELECT * must be wrapped: ResTarget -> ColumnRef -> A_Star
 			// This three-level structure matches PostgreSQL and enables
 			// the hasStarRef() check in output_columns.go to work correctly.
+			
+			// Handle EXCEPT and REPLACE modifiers
+			if i.Except != nil || i.Replace != nil {
+				// TODO: SELECT * EXCEPT and REPLACE require special handling
+				// EXCEPT: Should exclude specified columns from the result
+				// REPLACE: Should replace specified column expressions
+				// For now, we'll treat it as a regular * and log the limitation
+				if debug.Active {
+					if i.Except != nil {
+						log.Printf("spanner.convertSelect: SELECT * EXCEPT not fully implemented\n")
+					}
+					if i.Replace != nil {
+						log.Printf("spanner.convertSelect: SELECT * REPLACE not fully implemented\n")
+					}
+				}
+			}
+			
 			stmt.TargetList.Items = append(stmt.TargetList.Items, &sqlcast.ResTarget{
 				Val: &sqlcast.ColumnRef{
 					Fields: &sqlcast.List{
@@ -445,6 +462,46 @@ func (c *cc) convertSelect(n *ast.Select) *sqlcast.SelectStmt {
 					Location: int(i.Star) + c.positionOffset,
 				},
 				Location: int(i.Star) + c.positionOffset, // Adjust position to file offset
+			})
+		case *ast.DotStar:
+			// Handle table.* syntax
+			// Convert the expression part and wrap in ColumnRef with A_Star
+			var fields []sqlcast.Node
+			
+			// Add the table/expression reference
+			switch expr := i.Expr.(type) {
+			case *ast.Ident:
+				fields = append(fields, NewIdentifier(expr.Name))
+			case *ast.Path:
+				for _, ident := range expr.Idents {
+					fields = append(fields, NewIdentifier(ident.Name))
+				}
+			default:
+				// For complex expressions, treat as single field
+				fields = append(fields, c.convert(expr))
+			}
+			
+			// Add the star
+			fields = append(fields, &sqlcast.A_Star{})
+			
+			// Handle EXCEPT and REPLACE modifiers (same as Star)
+			if i.Except != nil || i.Replace != nil {
+				if debug.Active {
+					if i.Except != nil {
+						log.Printf("spanner.convertSelect: table.* EXCEPT not fully implemented\n")
+					}
+					if i.Replace != nil {
+						log.Printf("spanner.convertSelect: table.* REPLACE not fully implemented\n")
+					}
+				}
+			}
+			
+			stmt.TargetList.Items = append(stmt.TargetList.Items, &sqlcast.ResTarget{
+				Val: &sqlcast.ColumnRef{
+					Fields: &sqlcast.List{
+						Items: fields,
+					},
+				},
 			})
 		case *ast.Alias:
 			// Handle alias
