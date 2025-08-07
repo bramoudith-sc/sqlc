@@ -765,9 +765,10 @@ func (c *cc) convertWithClause(n *ast.With) *sqlcast.WithClause {
 			Ctequery: c.convert(cte.QueryExpr),
 		}
 
-		// TODO: Handle column aliases when available in memefish API
-		// Currently memefish doesn't expose column aliases in ArraySubQuery
-		// This would allow: ARRAY(SELECT title AS post_title FROM posts)
+		// Note: ARRAY subqueries in Spanner must return either:
+		// - A single column: ARRAY(SELECT col FROM table)
+		// - A STRUCT: ARRAY(SELECT AS STRUCT col1 AS name1, col2 AS name2 FROM table)
+		// Column aliases in CTE are not currently exposed by memefish API
 
 		clause.Ctes.Items = append(clause.Ctes.Items, commonTableExpr)
 	}
