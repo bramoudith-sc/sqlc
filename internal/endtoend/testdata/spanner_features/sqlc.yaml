@@ -1,7 +1,9 @@
 version: "2"
 sql:
   - engine: "spanner"
-    queries: "query.sql"
+    queries: 
+      - "query.sql"
+      - "cte_test.sql"
     schema: "schema.sql"
     gen:
       go:
