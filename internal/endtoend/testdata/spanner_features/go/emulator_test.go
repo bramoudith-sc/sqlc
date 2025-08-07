@@ -10,8 +10,8 @@ import (
 	"os"
 	"testing"
 
+	"cloud.google.com/go/spanner"
 	_ "github.com/googleapis/go-sql-spanner"
-	spannerdriver "github.com/googleapis/go-sql-spanner"
 )
 
 const (
@@ -91,9 +91,13 @@ func TestGeneratedCodeWithEmulator(t *testing.T) {
 }
 
 func createSchema(ctx context.Context, db *sql.DB) error {
+	// Drop existing tables first
+	db.ExecContext(ctx, "DROP TABLE IF EXISTS posts")
+	db.ExecContext(ctx, "DROP TABLE IF EXISTS users")
+	
 	// Create tables based on schema.sql
 	schemas := []string{
-		`CREATE TABLE IF NOT EXISTS users (
+		`CREATE TABLE users (
 			id STRING(36) NOT NULL,
 			name STRING(100),
 			email STRING(255),
@@ -103,7 +107,7 @@ func createSchema(ctx context.Context, db *sql.DB) error {
 			updated_at TIMESTAMP,
 			deleted_at TIMESTAMP,
 		) PRIMARY KEY (id)`,
-		`CREATE TABLE IF NOT EXISTS posts (
+		`CREATE TABLE posts (
 			id STRING(36) NOT NULL,
 			user_id STRING(36) NOT NULL,
 			title STRING(200),
@@ -142,7 +146,7 @@ func setupTestData(ctx context.Context, db *sql.DB) error {
 			sql.NullString{String: "alice@example.com", Valid: true},
 			sql.NullInt64{Int64: 95, Valid: true},
 			sql.NullString{String: "active", Valid: true},
-			spannerdriver.NullTime{Valid: false},
+			spanner.NullTime{Valid: false},
 		},
 		{
 			"user-2",
@@ -150,7 +154,7 @@ func setupTestData(ctx context.Context, db *sql.DB) error {
 			sql.NullString{String: "bob@example.com", Valid: true},
 			sql.NullInt64{Int64: 75, Valid: true},
 			sql.NullString{String: "pending", Valid: true},
-			spannerdriver.NullTime{Valid: false},
+			spanner.NullTime{Valid: false},
 		},
 		{
 			"user-3",
@@ -158,7 +162,7 @@ func setupTestData(ctx context.Context, db *sql.DB) error {
 			sql.NullString{String: "charlie@example.com", Valid: true},
 			sql.NullInt64{Int64: 45, Valid: true},
 			sql.NullString{String: "verified", Valid: true},
-			spannerdriver.NullTime{Valid: false},
+			spanner.NullTime{Valid: false},
 		},
 		{
 			"user-4",
@@ -166,7 +170,7 @@ func setupTestData(ctx context.Context, db *sql.DB) error {
 			sql.NullString{String: "david@example.com", Valid: true},
 			sql.NullInt64{Int64: 85, Valid: true},
 			sql.NullString{String: "active", Valid: true},
-			spannerdriver.NullTime{Valid: true}, // deleted user
+			spanner.NullTime{Valid: true}, // deleted user
 		},
 		{
 			"user-5",
@@ -174,7 +178,7 @@ func setupTestData(ctx context.Context, db *sql.DB) error {
 			sql.NullString{Valid: false}, // NULL email for COALESCE test
 			sql.NullInt64{Int64: 60, Valid: true},
 			sql.NullString{String: "inactive", Valid: true},
-			spannerdriver.NullTime{Valid: false},
+			spanner.NullTime{Valid: false},
 		},
 	}
 

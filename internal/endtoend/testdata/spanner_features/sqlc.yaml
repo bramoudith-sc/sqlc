@@ -1,7 +1,7 @@
 version: "2"
 sql:
   - engine: "spanner"
-    queries: "query.sql"
+    queries: "test_new_features.sql"
     schema: "schema.sql"
     gen:
       go:

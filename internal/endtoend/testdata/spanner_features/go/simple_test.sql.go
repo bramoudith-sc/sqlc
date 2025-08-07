@@ -18,9 +18,9 @@ SELECT
 FROM users WHERE id = @user_id;
 `
 
-func (q *Queries) SimpleCase(ctx context.Context, id string) (string, error) {
+func (q *Queries) SimpleCase(ctx context.Context, id string) (interface{}, error) {
 	row := q.db.QueryRowContext(ctx, simpleCase, id)
-	var grade string
+	var grade interface{}
 	err := row.Scan(&grade)
 	return grade, err
 }

@@ -95,8 +95,12 @@ func (c *cc) convert(n ast.Node) sqlcast.Node {
 		return &sqlcast.Null{}
 	case *ast.BinaryExpr:
 		return c.convertBinaryExpr(node)
+	case *ast.UnaryExpr:
+		return c.convertUnaryExpr(node)
 	case *ast.CallExpr:
 		return c.convertCallExpr(node)
+	case *ast.CountStarExpr:
+		return c.convertCountStarExpr(node)
 	case *ast.CaseExpr:
 		return c.convertCaseExpr(node)
 	case *ast.CastExpr:
@@ -105,6 +109,14 @@ func (c *cc) convert(n ast.Node) sqlcast.Node {
 		return c.convertInExpr(node)
 	case *ast.IsNullExpr:
 		return c.convertIsNullExpr(node)
+	case *ast.BetweenExpr:
+		return c.convertBetweenExpr(node)
+	case *ast.ExtractExpr:
+		return c.convertExtractExpr(node)
+	case *ast.IfExpr:
+		return c.convertIfExpr(node)
+	case *ast.ParenExpr:
+		return c.convertParenExpr(node)
 	case *ast.Param:
 		return c.convertParam(node)
 	case *ast.DefaultExpr:
@@ -855,6 +867,9 @@ func (c *cc) convertCaseExpr(n *ast.CaseExpr) *sqlcast.CaseExpr {
 		return nil
 	}
 	
+	// Simplified: just return a TODO for now to test
+	// return &sqlcast.TODO{}
+	
 	// Convert WHEN clauses
 	var args []sqlcast.Node
 	for _, when := range n.Whens {
@@ -996,4 +1011,165 @@ func (c *cc) convertType(t ast.Type) *sqlcast.TypeName {
 			},
 		},
 	}
+}
+
+// Additional expression converters
+func (c *cc) convertUnaryExpr(n *ast.UnaryExpr) sqlcast.Node {
+	if n == nil {
+		return nil
+	}
+	
+	// Handle different unary operators
+	switch n.Op {
+	case ast.OpNot:
+		// NOT operator
+		return &sqlcast.BoolExpr{
+			Xpr: nil,
+			Boolop: sqlcast.BoolExprTypeNot,
+			Args: &sqlcast.List{
+				Items: []sqlcast.Node{c.convert(n.Expr)},
+			},
+			Location: int(n.OpPos) - c.positionOffset,
+		}
+	case ast.OpPlus, ast.OpMinus:
+		// Unary plus/minus
+		return &sqlcast.A_Expr{
+			Kind: sqlcast.A_Expr_Kind(0), // AEXPR_OP
+			Name: &sqlcast.List{
+				Items: []sqlcast.Node{
+					&sqlcast.String{Str: string(n.Op)},
+				},
+			},
+			Rexpr:    c.convert(n.Expr),
+			Location: int(n.OpPos) - c.positionOffset,
+		}
+	case ast.OpBitNot:
+		// Bitwise NOT
+		return &sqlcast.A_Expr{
+			Kind: sqlcast.A_Expr_Kind(0), // AEXPR_OP
+			Name: &sqlcast.List{
+				Items: []sqlcast.Node{
+					&sqlcast.String{Str: "~"},
+				},
+			},
+			Rexpr:    c.convert(n.Expr),
+			Location: int(n.OpPos) - c.positionOffset,
+		}
+	default:
+		return todo(n)
+	}
+}
+
+func (c *cc) convertCountStarExpr(n *ast.CountStarExpr) *sqlcast.FuncCall {
+	if n == nil {
+		return nil
+	}
+	
+	// COUNT(*) is represented as a FuncCall with AggStar set to true
+	return &sqlcast.FuncCall{
+		Func: &sqlcast.FuncName{
+			Name: "count",
+		},
+		AggStar:  true, // This tells sqlc that it's COUNT(*)
+		Location: int(n.Count) - c.positionOffset,
+	}
+}
+
+func (c *cc) convertBetweenExpr(n *ast.BetweenExpr) sqlcast.Node {
+	if n == nil {
+		return nil
+	}
+	
+	// BETWEEN is converted to AND comparison: left >= rightStart AND left <= rightEnd
+	geExpr := &sqlcast.A_Expr{
+		Kind: sqlcast.A_Expr_Kind(0), // AEXPR_OP
+		Name: &sqlcast.List{
+			Items: []sqlcast.Node{
+				&sqlcast.String{Str: ">="},
+			},
+		},
+		Lexpr: c.convert(n.Left),
+		Rexpr: c.convert(n.RightStart),
+	}
+	
+	leExpr := &sqlcast.A_Expr{
+		Kind: sqlcast.A_Expr_Kind(0), // AEXPR_OP
+		Name: &sqlcast.List{
+			Items: []sqlcast.Node{
+				&sqlcast.String{Str: "<="},
+			},
+		},
+		Lexpr: c.convert(n.Left),
+		Rexpr: c.convert(n.RightEnd),
+	}
+	
+	// Combine with AND (or NOT AND if NOT BETWEEN)
+	andExpr := &sqlcast.BoolExpr{
+		Boolop: sqlcast.BoolExprTypeAnd,
+		Args: &sqlcast.List{
+			Items: []sqlcast.Node{geExpr, leExpr},
+		},
+	}
+	
+	if n.Not {
+		// NOT BETWEEN - wrap in NOT
+		return &sqlcast.BoolExpr{
+			Boolop: sqlcast.BoolExprTypeNot,
+			Args: &sqlcast.List{
+				Items: []sqlcast.Node{andExpr},
+			},
+		}
+	}
+	
+	return andExpr
+}
+
+func (c *cc) convertExtractExpr(n *ast.ExtractExpr) *sqlcast.FuncCall {
+	if n == nil {
+		return nil
+	}
+	
+	// EXTRACT(part FROM expr) is converted to a function call
+	return &sqlcast.FuncCall{
+		Func: &sqlcast.FuncName{
+			Name: "extract",
+		},
+		Args: &sqlcast.List{
+			Items: []sqlcast.Node{
+				&sqlcast.String{Str: string(n.Part)}, // DATE_PART like YEAR, MONTH, etc.
+				c.convert(n.Expr),
+			},
+		},
+		Location: int(n.Extract) - c.positionOffset,
+	}
+}
+
+func (c *cc) convertIfExpr(n *ast.IfExpr) *sqlcast.CaseExpr {
+	if n == nil {
+		return nil
+	}
+	
+	// IF(cond, true_val, false_val) is converted to CASE WHEN cond THEN true_val ELSE false_val END
+	return &sqlcast.CaseExpr{
+		Args: &sqlcast.List{
+			Items: []sqlcast.Node{
+				&sqlcast.CaseWhen{
+					Expr:   c.convert(n.Cond),
+					Result: c.convert(n.TrueResult),
+				},
+			},
+		},
+		Defresult: c.convert(n.FalseResult),
+		Location:  int(n.If) - c.positionOffset,
+	}
+}
+
+func (c *cc) convertParenExpr(n *ast.ParenExpr) sqlcast.Node {
+	if n == nil {
+		return nil
+	}
+	
+	// Parenthesized expressions don't have a direct equivalent in PostgreSQL AST
+	// We just return the inner expression
+	return c.convert(n.Expr)
 }
