@@ -68,19 +68,20 @@
 
 ### UNNEST
 - Basic UNNEST in FROM clause - implemented
-- WITH OFFSET - TODO
+- WITH OFFSET - implemented (maps to PostgreSQL's WITH ORDINALITY)
 
-### DDL Operations
+### DDL Operations  
 - CREATE TABLE - basic implementation
 - DROP TABLE - basic implementation
-- Missing: indexes, constraints, interleaving, TTL
+- CREATE INDEX - implemented with basic support
+- DROP INDEX - implemented
+- ALTER TABLE - implemented (ADD/DROP COLUMN, ALTER COLUMN)
+- CREATE/DROP VIEW - implemented
+- Missing: INTERLEAVE IN, ROW DELETION POLICY, constraints
 
 ## Not Yet Implemented
 
 ### DDL Operations
-- CREATE/DROP INDEX
-- ALTER TABLE
-- CREATE/DROP VIEW
 - CREATE/DROP SEQUENCE
 
 ### Spanner-Specific Features

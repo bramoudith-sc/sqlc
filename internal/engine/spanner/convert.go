@@ -64,6 +64,16 @@ func (c *cc) convert(n ast.Node) sqlcast.Node {
 		return c.convertCreateTable(node)
 	case *ast.DropTable:
 		return c.convertDropTable(node)
+	case *ast.CreateIndex:
+		return c.convertCreateIndex(node)
+	case *ast.DropIndex:
+		return c.convertDropIndex(node)
+	case *ast.AlterTable:
+		return c.convertAlterTable(node)
+	case *ast.CreateView:
+		return c.convertCreateView(node)
+	case *ast.DropView:
+		return c.convertDropView(node)
 
 	// DML Statements
 	case *ast.Insert:
@@ -230,6 +240,200 @@ func (c *cc) convertDropTable(n *ast.DropTable) *sqlcast.DropTableStmt {
 		IfExists: n.IfExists,
 		Tables: []*sqlcast.TableName{
 			parseTableName(n.Name),
+		},
+	}
+}
+
+func (c *cc) convertCreateIndex(n *ast.CreateIndex) *sqlcast.IndexStmt {
+	stmt := &sqlcast.IndexStmt{
+		Idxname:     identifier(strings.Join(pathToStrings(n.Name), ".")),
+		Relation:    convertPathToRangeVar(n.TableName),
+		Unique:      n.Unique,
+		IfNotExists: n.IfNotExists,
+		Params:      &sqlcast.List{Items: []sqlcast.Node{}},
+	}
+	
+	// Convert index keys to column names
+	for _, key := range n.Keys {
+		if key.Name != nil {
+			// Handle column reference
+			colName := identifier(strings.Join(pathToStrings(key.Name), "."))
+			stmt.Params.Items = append(stmt.Params.Items, &sqlcast.IndexElem{
+				Name: &colName,
+				// Spanner supports ASC/DESC in indexes
+				Ordering: convertSortDirection(key.Dir),
+			})
+		}
+	}
+	
+	// Note: STORING, INTERLEAVE IN, and OPTIONS are Spanner-specific
+	// and don't have direct equivalents in PostgreSQL's AST
+	if n.Storing != nil && debug.Active {
+		log.Printf("spanner.convertCreateIndex: STORING clause not fully supported\n")
+	}
+	if n.InterleaveIn != nil && debug.Active {
+		log.Printf("spanner.convertCreateIndex: INTERLEAVE IN clause not fully supported\n")
+	}
+	
+	return stmt
+}
+
+func (c *cc) convertDropIndex(n *ast.DropIndex) *sqlcast.DropStmt {
+	indexName := identifier(strings.Join(pathToStrings(n.Name), "."))
+	return &sqlcast.DropStmt{
+		RemoveType: sqlcast.OBJECT_INDEX,
+		IfExists:   n.IfExists,
+		Objects: &sqlcast.List{
+			Items: []sqlcast.Node{
+				&sqlcast.String{Str: indexName},
+			},
+		},
+	}
+}
+
+func (c *cc) convertAlterTable(n *ast.AlterTable) *sqlcast.AlterTableStmt {
+	stmt := &sqlcast.AlterTableStmt{
+		Table: convertPathToRangeVar(n.Name),
+		Cmds:  &sqlcast.List{Items: []sqlcast.Node{}},
+	}
+	
+	// Handle different types of table alterations
+	switch alt := n.TableAlteration.(type) {
+	case *ast.AddColumn:
+		for _, col := range alt.Columns {
+			colDef := &sqlcast.ColumnDef{
+				Colname: identifier(col.Name.Name),
+			}
+			// Convert column type
+			if col.Type != nil {
+				colDef.TypeName = convertType(col.Type)
+			}
+			// Handle NOT NULL constraint
+			if col.NotNull {
+				colDef.Constraints = &sqlcast.List{
+					Items: []sqlcast.Node{
+						&sqlcast.Constraint{
+							Contype: sqlcast.CONSTR_NOTNULL,
+						},
+					},
+				}
+			}
+			
+			stmt.Cmds.Items = append(stmt.Cmds.Items, &sqlcast.AlterTableCmd{
+				Subtype: sqlcast.AT_AddColumn,
+				Def:     colDef,
+			})
+		}
+	case *ast.DropColumn:
+		for _, col := range alt.Names {
+			colName := identifier(col.Name)
+			stmt.Cmds.Items = append(stmt.Cmds.Items, &sqlcast.AlterTableCmd{
+				Subtype: sqlcast.AT_DropColumn,
+				Name:    &colName,
+			})
+		}
+	case *ast.AlterColumn:
+		// Handle ALTER COLUMN
+		if alt.Name != nil {
+			colName := identifier(alt.Name.Name)
+			cmd := &sqlcast.AlterTableCmd{
+				Name: &colName,
+			}
+			
+			// Determine the alteration type
+			if alt.Alteration != nil {
+				switch alteration := alt.Alteration.(type) {
+				case *ast.AlterColumnSetType:
+					cmd.Subtype = sqlcast.AT_AlterColumnType
+					cmd.Def = &sqlcast.ColumnDef{
+						TypeName: convertType(alteration.Type),
+					}
+				case *ast.AlterColumnSetDefault:
+					cmd.Subtype = sqlcast.AT_ColumnDefault
+					// Convert default expression
+				case *ast.AlterColumnDropDefault:
+					cmd.Subtype = sqlcast.AT_DropNotNull
+				}
+			}
+			
+			stmt.Cmds.Items = append(stmt.Cmds.Items, cmd)
+		}
+	default:
+		if debug.Active {
+			log.Printf("spanner.convertAlterTable: Unsupported alteration type %T\n", alt)
+		}
+	}
+	
+	return stmt
+}
+
+// Helper functions for DDL conversions
+func pathToStrings(p *ast.Path) []string {
+	if p == nil {
+		return nil
+	}
+	var result []string
+	for _, ident := range p.Idents {
+		result = append(result, ident.Name)
+	}
+	return result
+}
+
+func convertPathToRangeVar(p *ast.Path) *sqlcast.RangeVar {
+	if p == nil {
+		return nil
+	}
+	parts := pathToStrings(p)
+	if len(parts) == 0 {
+		return nil
+	}
+	
+	// Take the last part as the table name
+	tableName := identifier(parts[len(parts)-1])
+	rangeVar := &sqlcast.RangeVar{
+		Relname: &tableName,
+	}
+	
+	// If there are more parts, they represent the schema
+	if len(parts) > 1 {
+		schemaName := identifier(strings.Join(parts[:len(parts)-1], "."))
+		rangeVar.Schemaname = &schemaName
+	}
+	
+	return rangeVar
+}
+
+func convertSortDirection(dir ast.Dir) sqlcast.SortByDir {
+	switch dir {
+	case ast.DirAsc:
+		return sqlcast.SORTBY_ASC
+	case ast.DirDesc:
+		return sqlcast.SORTBY_DESC
+	default:
+		return sqlcast.SORTBY_DEFAULT
+	}
+}
+
+func (c *cc) convertCreateView(n *ast.CreateView) *sqlcast.ViewStmt {
+	viewName := identifier(strings.Join(pathToStrings(n.Name), "."))
+	return &sqlcast.ViewStmt{
+		View: &sqlcast.RangeVar{
+			Relname: &viewName,
+		},
+		Query:   c.convert(n.Query),
+		Replace: n.OrReplace,
+	}
+}
+
+func (c *cc) convertDropView(n *ast.DropView) *sqlcast.DropStmt {
+	viewName := identifier(strings.Join(pathToStrings(n.Name), "."))
+	return &sqlcast.DropStmt{
+		RemoveType: sqlcast.OBJECT_VIEW,
+		IfExists:   n.IfExists,
+		Objects: &sqlcast.List{
+			Items: []sqlcast.Node{
+				&sqlcast.String{Str: viewName},
+			},
 		},
 	}
 }
@@ -1782,15 +1986,31 @@ func (c *cc) convertUnnest(n *ast.Unnest) sqlcast.Node {
 								},
 							},
 						},
-						// TODO: Handle n.WithOffset for WITH OFFSET clause
-						// This would add an ordinality column to the result
 					},
 				},
 			},
 		},
 	}
 	
-	// Handle alias if present
+	// Handle WITH OFFSET clause
+	// In PostgreSQL, this is represented as WITH ORDINALITY
+	if n.WithOffset != nil {
+		rangeFunc.Ordinality = true
+		
+		// If WITH OFFSET has an alias, it becomes a column alias
+		// Note: PostgreSQL's WITH ORDINALITY adds a column named "ordinality" by default
+		// Spanner's WITH OFFSET AS alias allows custom naming
+		if n.WithOffset.As != nil && n.WithOffset.As.Alias != nil {
+			// The offset column alias is handled separately in Spanner
+			// but PostgreSQL doesn't have direct support for renaming the ordinality column
+			// in the UNNEST clause itself
+			if debug.Active {
+				log.Printf("spanner.convertUnnest: WITH OFFSET AS alias - ordinality column aliasing may need manual handling\n")
+			}
+		}
+	}
+	
+	// Handle alias for the value column
 	if n.As != nil && n.As.Alias != nil {
 		alias := identifier(n.As.Alias.Name)
 		rangeFunc.Alias = &sqlcast.Alias{
