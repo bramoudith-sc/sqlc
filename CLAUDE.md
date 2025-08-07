@@ -168,6 +168,22 @@ Very useful for understanding how memefish parses specific SQL constructs and wh
 - [ ] Array and struct type handling
 - [ ] Transaction hints and statement hints
 
+## Implementation Patterns
+
+### When in Doubt, Reference Other Engines
+When implementing new features or unsure about the correct approach:
+1. Check how PostgreSQL engine handles it (`internal/engine/postgresql/`)
+2. Review SQLite implementation (`internal/engine/sqlite/`) 
+3. Look at Dolphin/MySQL approach (`internal/engine/dolphin/`)
+4. Follow the most appropriate pattern for Spanner's needs
+
+Common patterns to look for:
+- AST node conversion approaches
+- Error handling strategies (e.g., TODO/unsupported node handling)
+- Type inference logic
+- Case sensitivity handling
+- List initialization patterns
+
 ## Questions to Consider
 
 When implementing new features, ask:
@@ -175,3 +191,4 @@ When implementing new features, ask:
 2. Can this be maintenance-free using built-in functions?
 3. Does this follow the established patterns for Lists and wrapping?
 4. Have I tested with both emulator and generated code?
+5. How do other engines handle this scenario?

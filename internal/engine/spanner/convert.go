@@ -37,9 +37,9 @@ type cc struct {
 	positionOffset int            // Offset to adjust AST positions to file positions
 }
 
-func todo(n ast.Node) *sqlcast.TODO {
+func todo(funcname string, n ast.Node) *sqlcast.TODO {
 	if debug.Active {
-		log.Printf("spanner.convert: Unknown node type %T\n", n)
+		log.Printf("spanner.%s: Unknown node type %T\n", funcname, n)
 	}
 	return &sqlcast.TODO{}
 }
@@ -185,7 +185,7 @@ func (c *cc) convert(n ast.Node) sqlcast.Node {
 		}
 
 	default:
-		return todo(n)
+		return todo("convert", n)
 	}
 }
 
@@ -215,7 +215,11 @@ func (c *cc) convertCreateTable(n *ast.CreateTable) *sqlcast.CreateTableStmt {
 		stmt.Cols = append(stmt.Cols, colDef)
 	}
 
-	// TODO: Convert table constraints and other features
+	// TODO: Convert table constraints and other features when needed:
+	// - INTERLEAVE IN PARENT clause for parent-child relationships
+	// - ROW DELETION POLICY for TTL support
+	// - Table-level CHECK constraints
+	// These features are Spanner-specific and may require extending sqlc's AST
 	return stmt
 }
 
@@ -677,7 +681,7 @@ func (c *cc) convertTableExpr(n ast.TableExpr) sqlcast.Node {
 		}
 		return subquery
 	default:
-		return todo(n)
+		return todo("convertQueryExpr", n)
 	}
 }
 
@@ -762,6 +766,8 @@ func (c *cc) convertWithClause(n *ast.With) *sqlcast.WithClause {
 		}
 
 		// TODO: Handle column aliases when available in memefish API
+		// Currently memefish doesn't expose column aliases in ArraySubQuery
+		// This would allow: ARRAY(SELECT title AS post_title FROM posts)
 
 		clause.Ctes.Items = append(clause.Ctes.Items, commonTableExpr)
 	}
@@ -1136,7 +1142,7 @@ func (c *cc) convertUnaryExpr(n *ast.UnaryExpr) sqlcast.Node {
 			Location: int(n.OpPos) - c.positionOffset,
 		}
 	default:
-		return todo(n)
+		return todo("convertExpr", n)
 	}
 }
 
