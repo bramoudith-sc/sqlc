@@ -84,6 +84,9 @@ func TestWithEmulator(t *testing.T) {
 				updated_at TIMESTAMP,
 				metadata JSON,
 				interval_col INTERVAL,
+				score INT64,
+				status STRING(50),
+				deleted_at TIMESTAMP,
 			) PRIMARY KEY (id)`,
 			`CREATE TABLE posts (
 				id INT64 NOT NULL,
@@ -133,6 +136,31 @@ func TestWithEmulator(t *testing.T) {
 
 	t.Run("TestSafeFunctions", func(t *testing.T) {
 		testSafeFunctions(t, ctx, client)
+	})
+
+	// Test new SQL features
+	t.Run("TestCaseWhen", func(t *testing.T) {
+		testCaseWhen(t, ctx, client)
+	})
+
+	t.Run("TestCast", func(t *testing.T) {
+		testCast(t, ctx, client)
+	})
+
+	t.Run("TestCoalesce", func(t *testing.T) {
+		testCoalesce(t, ctx, client)
+	})
+
+	t.Run("TestIsNull", func(t *testing.T) {
+		testIsNull(t, ctx, client)
+	})
+
+	t.Run("TestInOperator", func(t *testing.T) {
+		testInOperator(t, ctx, client)
+	})
+
+	t.Run("TestJoins", func(t *testing.T) {
+		testJoins(t, ctx, client)
 	})
 }
 
