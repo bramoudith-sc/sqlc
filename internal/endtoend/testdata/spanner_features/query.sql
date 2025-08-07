@@ -57,3 +57,85 @@ SELECT
 FROM users u
 LEFT JOIN posts p ON u.id = p.user_id
 GROUP BY u.id, u.name;
+
+-- Test IFNULL function
+-- name: GetUserNameOrDefault :one
+SELECT IFNULL(name, 'Unknown User') as user_name
+FROM users WHERE id = @user_id;
+
+-- Test IFNULL with numbers
+-- name: GetUserScoreOrZero :one
+SELECT IFNULL(score, 100) as score_value
+FROM users WHERE id = @user_id;
+
+-- Test simple CASE with number in ELSE
+-- name: TestCaseWithNumberElse :one
+SELECT CASE WHEN score > 50 THEN score ELSE 0 END as result
+FROM users WHERE id = @user_id;
+
+-- Test NULLIF function
+-- name: GetUserStatusNullIfDeleted :one
+SELECT NULLIF(status, 'deleted') as active_status
+FROM users WHERE id = @user_id;
+
+-- Test complex COALESCE with multiple arguments
+-- name: GetFirstNonNullValue :one
+SELECT COALESCE(name, status, 'No Value') as first_value
+FROM users WHERE id = @user_id;
+
+-- Test COALESCE with numbers
+-- name: GetUserScoreOrDefault :one
+SELECT COALESCE(score, 0) as user_score
+FROM users WHERE id = @user_id;
+
+-- Test TypeCast directly
+-- name: TestSimpleDateCast :one
+SELECT DATE '2024-01-01' as date_value;
+
+-- Test explicit CAST
+-- name: TestExplicitCast :one
+SELECT CAST('2024-01-01' AS DATE) as cast_date;
+
+-- Debug: Test just returning a date column
+-- name: TestDateColumn :one
+SELECT deleted_at as date_col FROM users WHERE id = @user_id;
+
+-- name: TestSimpleTimestampCast :one
+SELECT TIMESTAMP '2024-01-01 10:00:00' as timestamp_value;
+
+-- name: TestSimpleNumericCast :one
+SELECT NUMERIC '123.456' as numeric_value;
+
+-- Test all Spanner literal types with CASE expressions
+-- name: TestIntegerLiteral :one
+SELECT CASE WHEN true THEN 42 ELSE 0 END as int_value;
+
+-- name: TestFloatLiteral :one
+SELECT CASE WHEN true THEN 3.14 ELSE 0.0 END as float_value;
+
+-- name: TestBooleanLiteral :one
+SELECT CASE WHEN true THEN true ELSE false END as bool_value;
+
+-- name: TestStringLiteral :one
+SELECT CASE WHEN true THEN 'hello' ELSE 'world' END as string_value;
+
+-- name: TestBytesLiteral :one
+SELECT CASE WHEN true THEN b'hello' ELSE b'world' END as bytes_value;
+
+-- name: TestDateLiteral :one
+SELECT CASE WHEN true THEN DATE '2024-01-01' ELSE DATE '2024-12-31' END as date_value;
+
+-- name: TestTimestampLiteral :one
+SELECT CASE WHEN true THEN TIMESTAMP '2024-01-01 10:00:00' ELSE TIMESTAMP '2024-12-31 23:59:59' END as timestamp_value;
+
+-- name: TestNumericLiteral :one
+SELECT CASE WHEN true THEN NUMERIC '123.456' ELSE NUMERIC '0.0' END as numeric_value;
+
+-- name: TestJsonLiteral :one
+SELECT CASE WHEN true THEN JSON '{"key": "value"}' ELSE JSON '{}' END as json_value;
+
+-- name: TestArrayLiteral :one
+SELECT CASE WHEN true THEN [1, 2, 3] ELSE [4, 5, 6] END as array_value;
+
+-- name: TestNullLiteral :one
+SELECT CASE WHEN false THEN 'value' ELSE NULL END as null_value;

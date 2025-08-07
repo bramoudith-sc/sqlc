@@ -114,6 +114,9 @@ func (c *cc) convert(n ast.Node) sqlcast.Node {
 	case *ast.ExtractExpr:
 		return c.convertExtractExpr(node)
 	case *ast.IfExpr:
+		if debug.Active {
+			log.Printf("Converting IfExpr to CaseExpr\n")
+		}
 		return c.convertIfExpr(node)
 	case *ast.ParenExpr:
 		return c.convertParenExpr(node)
@@ -121,6 +124,22 @@ func (c *cc) convert(n ast.Node) sqlcast.Node {
 		return c.convertParam(node)
 	case *ast.DefaultExpr:
 		return c.convertDefaultExpr(node)
+	
+	// Spanner-specific literal types
+	case *ast.DateLiteral:
+		return c.convertDateLiteral(node)
+	case *ast.TimestampLiteral:
+		return c.convertTimestampLiteral(node)
+	case *ast.NumericLiteral:
+		return c.convertNumericLiteral(node)
+	case *ast.JSONLiteral:
+		return c.convertJSONLiteral(node)
+	case *ast.BytesLiteral:
+		return c.convertBytesLiteral(node)
+	case *ast.ArrayLiteral:
+		return c.convertArrayLiteral(node)
+	case *ast.FloatLiteral:
+		return c.convertFloatLiteral(node)
 
 	// Other nodes
 	case *ast.Star:
@@ -487,7 +506,7 @@ func (c *cc) convertBinaryExpr(n *ast.BinaryExpr) *sqlcast.A_Expr {
 	}
 }
 
-func (c *cc) convertCallExpr(n *ast.CallExpr) *sqlcast.FuncCall {
+func (c *cc) convertCallExpr(n *ast.CallExpr) sqlcast.Node {
 	// Extract function name from path
 	var funcName string
 	if n.Func != nil && len(n.Func.Idents) > 0 {
@@ -506,23 +525,46 @@ func (c *cc) convertCallExpr(n *ast.CallExpr) *sqlcast.FuncCall {
 		}
 		funcName = strings.Join(parts, ".")
 	}
+	
+	// Convert arguments first for conditional expression handling
+	var args []sqlcast.Node
+	for _, arg := range n.Args {
+		switch a := arg.(type) {
+		case *ast.ExprArg:
+			args = append(args, c.convert(a.Expr))
+		default:
+			// Handle other arg types
+		}
+	}
+	
+	// Handle conditional expressions that should be converted to CASE
+	funcNameLower := strings.ToLower(funcName)
+	switch funcNameLower {
+	case "ifnull":
+		// IFNULL(expr, null_result) -> CASE WHEN expr IS NULL THEN null_result ELSE expr END
+		if len(args) == 2 {
+			return c.convertIfNullToCase(args[0], args[1], int(n.Func.Pos()))
+		}
+	case "nullif":
+		// NULLIF(expr, expr_to_match) -> CASE WHEN expr = expr_to_match THEN NULL ELSE expr END
+		if len(args) == 2 {
+			return c.convertNullIfToCase(args[0], args[1], int(n.Func.Pos()))
+		}
+	case "coalesce":
+		// Use native CoalesceExpr for better type inference
+		if len(args) >= 1 {
+			return &sqlcast.CoalesceExpr{
+				Args:     &sqlcast.List{Items: args},
+				Location: int(n.Func.Pos()),
+			}
+		}
+	}
 
 	funcCall := &sqlcast.FuncCall{
 		Func: &sqlcast.FuncName{
 			Name: funcName,
 		},
-		Args: &sqlcast.List{Items: []sqlcast.Node{}},
-	}
-
-	// Convert arguments
-	for _, arg := range n.Args {
-		// Handle different arg types
-		switch a := arg.(type) {
-		case *ast.ExprArg:
-			funcCall.Args.Items = append(funcCall.Args.Items, c.convert(a.Expr))
-		default:
-			// Handle other arg types
-		}
+		Args: &sqlcast.List{Items: args},
 	}
 
 	return funcCall
@@ -1136,7 +1178,7 @@ func (c *cc) convertExtractExpr(n *ast.ExtractExpr) *sqlcast.FuncCall {
 		},
 		Args: &sqlcast.List{
 			Items: []sqlcast.Node{
-				&sqlcast.String{Str: string(n.Part)}, // DATE_PART like YEAR, MONTH, etc.
+				&sqlcast.String{Str: n.Part.Name}, // DATE_PART like YEAR, MONTH, etc.
 				c.convert(n.Expr),
 			},
 		},
@@ -1150,16 +1192,19 @@ func (c *cc) convertIfExpr(n *ast.IfExpr) *sqlcast.CaseExpr {
 	}
 	
 	// IF(cond, true_val, false_val) is converted to CASE WHEN cond THEN true_val ELSE false_val END
+	// Note: This should produce the same AST structure as a native CASE expression
+	caseWhen := &sqlcast.CaseWhen{
+		Expr:     c.convert(n.Expr),
+		Result:   c.convert(n.TrueResult),
+		Location: int(n.If) - c.positionOffset,
+	}
+	
 	return &sqlcast.CaseExpr{
+		Arg: nil, // Simple CASE (no expression after CASE keyword)
 		Args: &sqlcast.List{
-			Items: []sqlcast.Node{
-				&sqlcast.CaseWhen{
-					Expr:   c.convert(n.Cond),
-					Result: c.convert(n.TrueResult),
-				},
-			},
+			Items: []sqlcast.Node{caseWhen},
 		},
-		Defresult: c.convert(n.FalseResult),
+		Defresult: c.convert(n.ElseResult),
 		Location:  int(n.If) - c.positionOffset,
 	}
 }
@@ -1172,4 +1217,158 @@ func (c *cc) convertParenExpr(n *ast.ParenExpr) sqlcast.Node {
 	// Parenthesized expressions don't have a direct equivalent in PostgreSQL AST
 	// We just return the inner expression
 	return c.convert(n.Expr)
+}
+
+func (c *cc) convertIfNullToCase(expr, nullResult sqlcast.Node, location int) sqlcast.Node {
+	// IFNULL(expr, null_result) -> CASE WHEN expr IS NOT NULL THEN expr ELSE null_result END
+	// Reordered to put the literal/constant in Defresult for better type inference
+	nullTest := &sqlcast.NullTest{
+		Arg:          expr,
+		Nulltesttype: 1, // IS_NOT_NULL
+		Location:     location,
+	}
+	
+	caseWhen := &sqlcast.CaseWhen{
+		Expr:     nullTest,
+		Result:   expr,
+		Location: location,
+	}
+	
+	return &sqlcast.CaseExpr{
+		Args: &sqlcast.List{
+			Items: []sqlcast.Node{caseWhen},
+		},
+		Defresult: nullResult, // Put the literal/constant here for type inference
+		Location:  location,
+	}
+}
+
+func (c *cc) convertNullIfToCase(expr, exprToMatch sqlcast.Node, location int) sqlcast.Node {
+	// NULLIF(expr, expr_to_match) -> CASE WHEN expr = expr_to_match THEN NULL ELSE expr END
+	equalExpr := &sqlcast.A_Expr{
+		Kind:     0, // AEXPR_OP
+		Name:     &sqlcast.List{Items: []sqlcast.Node{&sqlcast.String{Str: "="}}},
+		Lexpr:    expr,
+		Rexpr:    exprToMatch,
+		Location: location,
+	}
+	
+	caseWhen := &sqlcast.CaseWhen{
+		Expr:     equalExpr,
+		Result:   &sqlcast.A_Const{Val: &sqlcast.Null{}},
+		Location: location,
+	}
+	
+	return &sqlcast.CaseExpr{
+		Args: &sqlcast.List{
+			Items: []sqlcast.Node{caseWhen},
+		},
+		Defresult: expr,
+		Location:  location,
+	}
+}
+
+// convertCoalesceToCase is no longer needed since we use CoalesceExpr directly
+
+func (c *cc) convertFloatLiteral(n *ast.FloatLiteral) *sqlcast.A_Const {
+	return &sqlcast.A_Const{
+		Val: &sqlcast.Float{Str: n.Value},
+	}
+}
+
+func (c *cc) convertBytesLiteral(n *ast.BytesLiteral) *sqlcast.A_Const {
+	// Bytes literals in Spanner are like b'hello'
+	return &sqlcast.A_Const{
+		Val: &sqlcast.String{Str: string(n.Value)}, // Convert bytes to string
+	}
+}
+
+func (c *cc) convertDateLiteral(n *ast.DateLiteral) sqlcast.Node {
+	// DATE '2024-01-01' -> Direct TypeCast with proper type
+	// Debug: Use the same conversion path as CAST() to ensure consistency
+	if debug.Active {
+		log.Printf("Converting DateLiteral: %s\n", n.Value.Value)
+	}
+	
+	// Create the same TypeName structure as convertType would
+	typeName := &sqlcast.TypeName{
+		Names: &sqlcast.List{
+			Items: []sqlcast.Node{
+				&sqlcast.String{Str: "date"}, // Must match what convertType produces
+			},
+		},
+	}
+	
+	result := &sqlcast.TypeCast{
+		Arg: &sqlcast.A_Const{
+			Val: &sqlcast.String{Str: n.Value.Value},
+		},
+		TypeName: typeName,
+		Location: int(n.Date),
+	}
+	
+	if debug.Active {
+		log.Printf("Created TypeCast with TypeName: %v\n", typeName)
+	}
+	
+	return result
+}
+
+func (c *cc) convertTimestampLiteral(n *ast.TimestampLiteral) sqlcast.Node {
+	return &sqlcast.TypeCast{
+		Arg: &sqlcast.A_Const{
+			Val: &sqlcast.String{Str: n.Value.Value},
+		},
+		TypeName: &sqlcast.TypeName{
+			Names: &sqlcast.List{
+				Items: []sqlcast.Node{
+					&sqlcast.String{Str: "timestamp"}, // lowercase
+				},
+			},
+		},
+		Location: int(n.Timestamp),
+	}
+}
+
+func (c *cc) convertNumericLiteral(n *ast.NumericLiteral) sqlcast.Node {
+	return &sqlcast.TypeCast{
+		Arg: &sqlcast.A_Const{
+			Val: &sqlcast.String{Str: n.Value.Value},
+		},
+		TypeName: &sqlcast.TypeName{
+			Names: &sqlcast.List{
+				Items: []sqlcast.Node{
+					&sqlcast.String{Str: "numeric"}, // lowercase
+				},
+			},
+		},
+		Location: int(n.Numeric),
+	}
+}
+
+func (c *cc) convertJSONLiteral(n *ast.JSONLiteral) sqlcast.Node {
+	return &sqlcast.TypeCast{
+		Arg: &sqlcast.A_Const{
+			Val: &sqlcast.String{Str: n.Value.Value},
+		},
+		TypeName: &sqlcast.TypeName{
+			Names: &sqlcast.List{
+				Items: []sqlcast.Node{
+					&sqlcast.String{Str: "json"}, // lowercase
+				},
+			},
+		},
+		Location: int(n.JSON),
+	}
+}
+
+func (c *cc) convertArrayLiteral(n *ast.ArrayLiteral) sqlcast.Node {
+	// [1, 2, 3] -> A_ArrayExpr
+	var elements []sqlcast.Node
+	for _, elem := range n.Values {
+		elements = append(elements, c.convert(elem))
+	}
+	return &sqlcast.A_ArrayExpr{
+		Elements: &sqlcast.List{Items: elements},
+	}
 }

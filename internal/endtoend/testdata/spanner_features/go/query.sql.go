@@ -8,6 +8,8 @@ package spanner_features
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"time"
 )
 
 const getActiveUsers = `-- name: GetActiveUsers :many
@@ -79,15 +81,28 @@ func (q *Queries) GetDeletedUsers(ctx context.Context) ([]GetDeletedUsersRow, er
 	return items, nil
 }
 
+const getFirstNonNullValue = `-- name: GetFirstNonNullValue :one
+SELECT COALESCE(name, status, 'No Value') as first_value
+FROM users WHERE id = @user_id;
+`
+
+// Test complex COALESCE with multiple arguments
+func (q *Queries) GetFirstNonNullValue(ctx context.Context, id string) (string, error) {
+	row := q.db.QueryRowContext(ctx, getFirstNonNullValue, id)
+	var first_value string
+	err := row.Scan(&first_value)
+	return first_value, err
+}
+
 const getUserDisplayName = `-- name: GetUserDisplayName :one
 SELECT COALESCE(name, 'Anonymous') as display_name
 FROM users WHERE id = @user_id;
 `
 
 // Test COALESCE function
-func (q *Queries) GetUserDisplayName(ctx context.Context, id string) (interface{}, error) {
+func (q *Queries) GetUserDisplayName(ctx context.Context, id string) (string, error) {
 	row := q.db.QueryRowContext(ctx, getUserDisplayName, id)
-	var display_name interface{}
+	var display_name string
 	err := row.Scan(&display_name)
 	return display_name, err
 }
@@ -128,6 +143,58 @@ func (q *Queries) GetUserIdAsInt(ctx context.Context, id string) (int64, error) 
 	var numeric_id int64
 	err := row.Scan(&numeric_id)
 	return numeric_id, err
+}
+
+const getUserNameOrDefault = `-- name: GetUserNameOrDefault :one
+SELECT IFNULL(name, 'Unknown User') as user_name
+FROM users WHERE id = @user_id;
+`
+
+// Test IFNULL function
+func (q *Queries) GetUserNameOrDefault(ctx context.Context, id string) (string, error) {
+	row := q.db.QueryRowContext(ctx, getUserNameOrDefault, id)
+	var user_name string
+	err := row.Scan(&user_name)
+	return user_name, err
+}
+
+const getUserScoreOrDefault = `-- name: GetUserScoreOrDefault :one
+SELECT COALESCE(score, 0) as user_score
+FROM users WHERE id = @user_id;
+`
+
+// Test COALESCE with numbers
+func (q *Queries) GetUserScoreOrDefault(ctx context.Context, id string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getUserScoreOrDefault, id)
+	var user_score int64
+	err := row.Scan(&user_score)
+	return user_score, err
+}
+
+const getUserScoreOrZero = `-- name: GetUserScoreOrZero :one
+SELECT IFNULL(score, 100) as score_value
+FROM users WHERE id = @user_id;
+`
+
+// Test IFNULL with numbers
+func (q *Queries) GetUserScoreOrZero(ctx context.Context, id string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getUserScoreOrZero, id)
+	var score_value int64
+	err := row.Scan(&score_value)
+	return score_value, err
+}
+
+const getUserStatusNullIfDeleted = `-- name: GetUserStatusNullIfDeleted :one
+SELECT NULLIF(status, 'deleted') as active_status
+FROM users WHERE id = @user_id;
+`
+
+// Test NULLIF function
+func (q *Queries) GetUserStatusNullIfDeleted(ctx context.Context, id string) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, getUserStatusNullIfDeleted, id)
+	var active_status interface{}
+	err := row.Scan(&active_status)
+	return active_status, err
 }
 
 const getUserWithPosts = `-- name: GetUserWithPosts :many
@@ -250,4 +317,197 @@ func (q *Queries) GetUsersWithPostCount(ctx context.Context) ([]GetUsersWithPost
 		return nil, err
 	}
 	return items, nil
+}
+
+const testArrayLiteral = `-- name: TestArrayLiteral :one
+SELECT CASE WHEN true THEN [1, 2, 3] ELSE [4, 5, 6] END as array_value;
+`
+
+func (q *Queries) TestArrayLiteral(ctx context.Context) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, testArrayLiteral)
+	var array_value interface{}
+	err := row.Scan(&array_value)
+	return array_value, err
+}
+
+const testBooleanLiteral = `-- name: TestBooleanLiteral :one
+SELECT CASE WHEN true THEN true ELSE false END as bool_value;
+`
+
+func (q *Queries) TestBooleanLiteral(ctx context.Context) (string, error) {
+	row := q.db.QueryRowContext(ctx, testBooleanLiteral)
+	var bool_value string
+	err := row.Scan(&bool_value)
+	return bool_value, err
+}
+
+const testBytesLiteral = `-- name: TestBytesLiteral :one
+SELECT CASE WHEN true THEN b'hello' ELSE b'world' END as bytes_value;
+`
+
+func (q *Queries) TestBytesLiteral(ctx context.Context) (string, error) {
+	row := q.db.QueryRowContext(ctx, testBytesLiteral)
+	var bytes_value string
+	err := row.Scan(&bytes_value)
+	return bytes_value, err
+}
+
+const testCaseWithNumberElse = `-- name: TestCaseWithNumberElse :one
+SELECT CASE WHEN score > 50 THEN score ELSE 0 END as result
+FROM users WHERE id = @user_id;
+`
+
+// Test simple CASE with number in ELSE
+func (q *Queries) TestCaseWithNumberElse(ctx context.Context, id string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, testCaseWithNumberElse, id)
+	var result int64
+	err := row.Scan(&result)
+	return result, err
+}
+
+const testDateColumn = `-- name: TestDateColumn :one
+SELECT deleted_at as date_col FROM users WHERE id = @user_id;
+`
+
+// Debug: Test just returning a date column
+func (q *Queries) TestDateColumn(ctx context.Context, id string) (sql.NullTime, error) {
+	row := q.db.QueryRowContext(ctx, testDateColumn, id)
+	var date_col sql.NullTime
+	err := row.Scan(&date_col)
+	return date_col, err
+}
+
+const testDateLiteral = `-- name: TestDateLiteral :one
+SELECT CASE WHEN true THEN DATE '2024-01-01' ELSE DATE '2024-12-31' END as date_value;
+`
+
+func (q *Queries) TestDateLiteral(ctx context.Context) (time.Time, error) {
+	row := q.db.QueryRowContext(ctx, testDateLiteral)
+	var date_value time.Time
+	err := row.Scan(&date_value)
+	return date_value, err
+}
+
+const testExplicitCast = `-- name: TestExplicitCast :one
+SELECT CAST('2024-01-01' AS DATE) as cast_date;
+`
+
+// Test explicit CAST
+func (q *Queries) TestExplicitCast(ctx context.Context) (time.Time, error) {
+	row := q.db.QueryRowContext(ctx, testExplicitCast)
+	var cast_date time.Time
+	err := row.Scan(&cast_date)
+	return cast_date, err
+}
+
+const testFloatLiteral = `-- name: TestFloatLiteral :one
+SELECT CASE WHEN true THEN 3.14 ELSE 0.0 END as float_value;
+`
+
+func (q *Queries) TestFloatLiteral(ctx context.Context) (float64, error) {
+	row := q.db.QueryRowContext(ctx, testFloatLiteral)
+	var float_value float64
+	err := row.Scan(&float_value)
+	return float_value, err
+}
+
+const testIntegerLiteral = `-- name: TestIntegerLiteral :one
+SELECT CASE WHEN true THEN 42 ELSE 0 END as int_value;
+`
+
+// Test all Spanner literal types with CASE expressions
+func (q *Queries) TestIntegerLiteral(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, testIntegerLiteral)
+	var int_value int64
+	err := row.Scan(&int_value)
+	return int_value, err
+}
+
+const testJsonLiteral = `-- name: TestJsonLiteral :one
+SELECT CASE WHEN true THEN JSON '{"key": "value"}' ELSE JSON '{}' END as json_value;
+`
+
+func (q *Queries) TestJsonLiteral(ctx context.Context) (json.RawMessage, error) {
+	row := q.db.QueryRowContext(ctx, testJsonLiteral)
+	var json_value json.RawMessage
+	err := row.Scan(&json_value)
+	return json_value, err
+}
+
+const testNullLiteral = `-- name: TestNullLiteral :one
+SELECT CASE WHEN false THEN 'value' ELSE NULL END as null_value;
+`
+
+func (q *Queries) TestNullLiteral(ctx context.Context) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, testNullLiteral)
+	var null_value interface{}
+	err := row.Scan(&null_value)
+	return null_value, err
+}
+
+const testNumericLiteral = `-- name: TestNumericLiteral :one
+SELECT CASE WHEN true THEN NUMERIC '123.456' ELSE NUMERIC '0.0' END as numeric_value;
+`
+
+func (q *Queries) TestNumericLiteral(ctx context.Context) (string, error) {
+	row := q.db.QueryRowContext(ctx, testNumericLiteral)
+	var numeric_value string
+	err := row.Scan(&numeric_value)
+	return numeric_value, err
+}
+
+const testSimpleDateCast = `-- name: TestSimpleDateCast :one
+SELECT DATE '2024-01-01' as date_value;
+`
+
+// Test TypeCast directly
+func (q *Queries) TestSimpleDateCast(ctx context.Context) (time.Time, error) {
+	row := q.db.QueryRowContext(ctx, testSimpleDateCast)
+	var date_value time.Time
+	err := row.Scan(&date_value)
+	return date_value, err
+}
+
+const testSimpleNumericCast = `-- name: TestSimpleNumericCast :one
+SELECT NUMERIC '123.456' as numeric_value;
+`
+
+func (q *Queries) TestSimpleNumericCast(ctx context.Context) (string, error) {
+	row := q.db.QueryRowContext(ctx, testSimpleNumericCast)
+	var numeric_value string
+	err := row.Scan(&numeric_value)
+	return numeric_value, err
+}
+
+const testSimpleTimestampCast = `-- name: TestSimpleTimestampCast :one
+SELECT TIMESTAMP '2024-01-01 10:00:00' as timestamp_value;
+`
+
+func (q *Queries) TestSimpleTimestampCast(ctx context.Context) (time.Time, error) {
+	row := q.db.QueryRowContext(ctx, testSimpleTimestampCast)
+	var timestamp_value time.Time
+	err := row.Scan(&timestamp_value)
+	return timestamp_value, err
+}
+
+const testStringLiteral = `-- name: TestStringLiteral :one
+SELECT CASE WHEN true THEN 'hello' ELSE 'world' END as string_value;
+`
+
+func (q *Queries) TestStringLiteral(ctx context.Context) (string, error) {
+	row := q.db.QueryRowContext(ctx, testStringLiteral)
+	var string_value string
+	err := row.Scan(&string_value)
+	return string_value, err
+}
+
+const testTimestampLiteral = `-- name: TestTimestampLiteral :one
+SELECT CASE WHEN true THEN TIMESTAMP '2024-01-01 10:00:00' ELSE TIMESTAMP '2024-12-31 23:59:59' END as timestamp_value;
+`
+
+func (q *Queries) TestTimestampLiteral(ctx context.Context) (time.Time, error) {
+	row := q.db.QueryRowContext(ctx, testTimestampLiteral)
+	var timestamp_value time.Time
+	err := row.Scan(&timestamp_value)
+	return timestamp_value, err
 }
