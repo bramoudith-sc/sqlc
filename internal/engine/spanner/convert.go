@@ -742,6 +742,11 @@ func (c *cc) convertTableExpr(n ast.TableExpr) sqlcast.Node {
 				Aliasname: &alias,
 			}
 		}
+		// TABLESAMPLE clause is parsed but doesn't affect code generation
+		// It only affects runtime row sampling, not the query structure
+		if t.Sample != nil && debug.Active {
+			log.Printf("spanner.convertTableExpr: TABLESAMPLE %s (runtime sampling only)\n", t.Sample.Method)
+		}
 		return rangeVar
 	case *ast.Join:
 		return c.convertJoin(t)
@@ -758,6 +763,10 @@ func (c *cc) convertTableExpr(n ast.TableExpr) sqlcast.Node {
 			subquery.Alias = &sqlcast.Alias{
 				Aliasname: &alias,
 			}
+		}
+		// TABLESAMPLE on subquery (runtime sampling only)
+		if t.Sample != nil && debug.Active {
+			log.Printf("spanner.convertTableExpr: TABLESAMPLE on subquery (runtime sampling only)\n")
 		}
 		return subquery
 	case *ast.Unnest:

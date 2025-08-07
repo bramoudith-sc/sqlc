@@ -19,9 +19,15 @@
 - UNION/INTERSECT/EXCEPT
 
 ### Functions and Operators
-- Arithmetic operators (+, -, *, /, etc.)
+- Arithmetic operators (+, -, *, /)
 - Comparison operators (=, !=, <, >, <=, >=)
 - Logical operators (AND, OR, NOT)
+- Bitwise operators (~, |, ^, &, <<, >>)
+- String concatenation (||)
+- LIKE and NOT LIKE operators
+- IN operator with subqueries and value lists
+- EXISTS operator
+- BETWEEN operator
 - NULL handling (IS NULL, IS NOT NULL, COALESCE, IFNULL, NULLIF)
 - CASE expressions
 - CAST operations
@@ -42,12 +48,16 @@
 - Array indexing (array[1], array[OFFSET(n)])
 - Struct field access (struct.field)
 - Parameter support (@param_name)
+- TABLESAMPLE (BERNOULLI and RESERVOIR methods)
+- DotStar syntax (table.*)
 
 ## Partially Implemented Features
 
 ### SELECT Modifiers
 - SELECT AS STRUCT - detected but not fully transformed
 - SELECT AS VALUE - detected but not validated
+- SELECT * EXCEPT - detected but column exclusion not implemented
+- SELECT * REPLACE - detected but column replacement not implemented
 
 ### UNNEST
 - Basic UNNEST in FROM clause - implemented
