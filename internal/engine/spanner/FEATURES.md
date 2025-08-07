@@ -67,10 +67,13 @@
 - SELECT * REPLACE - detected but column replacement not implemented
 
 ### UNNEST
-- Basic UNNEST in FROM clause - partial implementation
+- Basic UNNEST in FROM clause - partial implementation (AST conversion complete)
 - WITH OFFSET - partial implementation (maps to PostgreSQL's WITH ORDINALITY)
+- **Status**: AST conversion implemented but not functional
 - **Known Issue**: Column name resolution not working due to value table semantics
+- **Root Cause**: Cloud Spanner's value tables cannot be directly mapped to PostgreSQL's named column model
 - **Limitation**: Requires changes to common logic in output_columns.go for full support
+- **Tested Patterns**: None currently work due to column resolution issues
 
 ### DDL Operations  
 - CREATE TABLE - basic implementation
