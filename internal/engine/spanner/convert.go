@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/cloudspannerecosystem/memefish/ast"
+	"github.com/davecgh/go-spew/spew"
 
 	"github.com/sqlc-dev/sqlc/internal/debug"
 	sqlcast "github.com/sqlc-dev/sqlc/internal/sql/ast"
@@ -148,6 +149,26 @@ func (c *cc) convert(n ast.Node) sqlcast.Node {
 		return c.convertArraySubQuery(node)
 	case *ast.ExistsSubQuery:
 		return c.convertExistsSubQuery(node)
+	
+	// STRUCT literals
+	case *ast.TypedStructLiteral:
+		return c.convertTypedStructLiteral(node)
+	case *ast.TypelessStructLiteral:
+		return c.convertTypelessStructLiteral(node)
+	case *ast.TupleStructLiteral:
+		return c.convertTupleStructLiteral(node)
+	
+	// INTERVAL literals
+	case *ast.IntervalLiteralSingle:
+		return c.convertIntervalLiteralSingle(node)
+	case *ast.IntervalLiteralRange:
+		return c.convertIntervalLiteralRange(node)
+	
+	// Array/Struct access
+	case *ast.IndexExpr:
+		return c.convertIndexExpr(node)
+	case *ast.SelectorExpr:
+		return c.convertSelectorExpr(node)
 
 	// Other nodes
 	case *ast.Star:
@@ -469,6 +490,15 @@ func (c *cc) convertIdent(n *ast.Ident) *sqlcast.ColumnRef {
 }
 
 func (c *cc) convertPath(n *ast.Path) *sqlcast.ColumnRef {
+	// Debug: Dump the AST structure for STRUCT field access
+	if debug.Active && len(n.Idents) > 0 {
+		log.Printf("=== convertPath: Path with %d idents ===\n", len(n.Idents))
+		for i, ident := range n.Idents {
+			log.Printf("  Ident[%d]: %s\n", i, ident.Name)
+		}
+		log.Printf("Full AST dump:\n%s\n", spew.Sdump(n))
+	}
+	
 	items := []sqlcast.Node{}
 	for _, ident := range n.Idents {
 		items = append(items, NewIdentifier(ident.Name))
@@ -1415,5 +1445,148 @@ func (c *cc) convertArrayLiteral(n *ast.ArrayLiteral) sqlcast.Node {
 	}
 	return &sqlcast.A_ArrayExpr{
 		Elements: &sqlcast.List{Items: elements},
+	}
+}
+
+func (c *cc) convertTypedStructLiteral(n *ast.TypedStructLiteral) sqlcast.Node {
+	// STRUCT<x INT64, y STRING>(1, 'hello') -> RowExpr
+	// Convert to ROW expression which is similar to STRUCT
+	var args []sqlcast.Node
+	for _, val := range n.Values {
+		args = append(args, c.convert(val))
+	}
+	
+	return &sqlcast.RowExpr{
+		Args: &sqlcast.List{Items: args},
+		RowFormat: sqlcast.CoercionForm(0), // COERCE_EXPLICIT_CALL equivalent
+		Location: int(n.Struct),
+	}
+}
+
+func (c *cc) convertTypelessStructLiteral(n *ast.TypelessStructLiteral) sqlcast.Node {
+	// STRUCT(1, 'hello') -> RowExpr
+	var args []sqlcast.Node
+	for _, val := range n.Values {
+		// Handle TypelessStructLiteralArg interface
+		switch arg := val.(type) {
+		case *ast.ExprArg:
+			args = append(args, c.convert(arg.Expr))
+		case *ast.Alias:
+			// Handle alias within struct
+			args = append(args, c.convert(arg.Expr))
+		default:
+			args = append(args, todo(val))
+		}
+	}
+	
+	return &sqlcast.RowExpr{
+		Args: &sqlcast.List{Items: args},
+		RowFormat: sqlcast.CoercionForm(0), // COERCE_EXPLICIT_CALL equivalent
+		Location: int(n.Struct),
+	}
+}
+
+func (c *cc) convertTupleStructLiteral(n *ast.TupleStructLiteral) sqlcast.Node {
+	// (1, 'hello') as tuple -> RowExpr  
+	var args []sqlcast.Node
+	for _, val := range n.Values {
+		args = append(args, c.convert(val))
+	}
+	
+	return &sqlcast.RowExpr{
+		Args: &sqlcast.List{Items: args},
+		RowFormat: sqlcast.CoercionForm(1), // COERCE_IMPLICIT_CAST equivalent
+		Location: int(n.Lparen),
+	}
+}
+
+func (c *cc) convertIntervalLiteralSingle(n *ast.IntervalLiteralSingle) sqlcast.Node {
+	// INTERVAL 5 DAY -> TypeCast with interval type
+	// Convert the value and create an interval type cast
+	typeName := &sqlcast.TypeName{
+		Names: &sqlcast.List{
+			Items: []sqlcast.Node{
+				&sqlcast.String{Str: "interval"},
+			},
+		},
+	}
+	
+	// Combine value with date part as a string for the interval
+	// e.g., "5 DAY"
+	var intervalStr string
+	// n.Value is IntValue interface - convert it
+	switch v := n.Value.(type) {
+	case *ast.IntLiteral:
+		intervalStr = v.Value
+	case *ast.Param:
+		// Handle parameter case
+		return c.convert(v)
+	default:
+		intervalStr = "0"
+	}
+	
+	// Add the date/time part
+	intervalStr += " " + string(n.DateTimePart)
+	
+	return &sqlcast.TypeCast{
+		Arg: &sqlcast.A_Const{
+			Val: &sqlcast.String{Str: intervalStr},
+		},
+		TypeName: typeName,
+		Location: int(n.Interval),
+	}
+}
+
+func (c *cc) convertSelectorExpr(n *ast.SelectorExpr) sqlcast.Node {
+	// STRUCT(...).field -> A_Indirection with field name
+	// Convert to A_Indirection to represent field access
+	return &sqlcast.A_Indirection{
+		Arg: c.convert(n.Expr),
+		Indirection: &sqlcast.List{
+			Items: []sqlcast.Node{
+				&sqlcast.String{Str: n.Ident.Name}, // Field name as string
+			},
+		},
+	}
+}
+
+func (c *cc) convertIndexExpr(n *ast.IndexExpr) sqlcast.Node {
+	// array[index] or array[OFFSET(n)] or array[ORDINAL(n)]
+	// Convert to A_Indirection or A_ArrayExpr subscript
+	return &sqlcast.A_Indirection{
+		Arg: c.convert(n.Expr),
+		Indirection: &sqlcast.List{
+			Items: []sqlcast.Node{
+				&sqlcast.A_Indices{
+					Lidx: c.convert(n.Index),
+				},
+			},
+		},
+	}
+}
+
+func (c *cc) convertIntervalLiteralRange(n *ast.IntervalLiteralRange) sqlcast.Node {
+	// INTERVAL '1-2' YEAR TO MONTH -> TypeCast with interval type
+	typeName := &sqlcast.TypeName{
+		Names: &sqlcast.List{
+			Items: []sqlcast.Node{
+				&sqlcast.String{Str: "interval"},
+			},
+		},
+	}
+	
+	// Get the value string (n.Value is already *StringLiteral)
+	intervalStr := n.Value.Value
+	
+	// Add the range parts (e.g., "YEAR TO MONTH")
+	intervalStr += " " + string(n.StartingDateTimePart) + 
+	               " TO " + string(n.EndingDateTimePart)
+	
+	return &sqlcast.TypeCast{
+		Arg: &sqlcast.A_Const{
+			Val: &sqlcast.String{Str: intervalStr},
+		},
+		TypeName: typeName,
+		Location: int(n.Interval),
 	}
 }

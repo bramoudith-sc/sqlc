@@ -162,3 +162,35 @@ SELECT
   u.name,
   ARRAY(SELECT p.title FROM posts p WHERE p.user_id = u.id) as post_titles
 FROM users u;
+
+-- Test STRUCT support
+-- name: TestTypelessStruct :one
+SELECT STRUCT(1, 'hello', true) as struct_value;
+
+-- name: TestTypedStruct :one
+SELECT STRUCT<x INT64, y STRING, z BOOL>(42, 'world', false) as typed_struct;
+
+-- name: TestTupleStruct :one
+SELECT (100, 'tuple', DATE '2024-01-01') as tuple_value;
+
+-- Test INTERVAL support  
+-- name: TestIntervalSingle :one
+SELECT INTERVAL 5 DAY as interval_days;
+
+-- name: TestIntervalRange :one
+SELECT INTERVAL '1-2' YEAR TO MONTH as interval_range;
+
+-- Test array index access
+-- name: TestArrayIndexAccess :one
+SELECT 
+  ['apple', 'banana', 'cherry'][1] as second_fruit,
+  ARRAY<INT64>[10, 20, 30][OFFSET(0)] as first_number;
+
+-- Test struct field access
+-- name: TestStructFieldAccess :one
+SELECT 
+  STRUCT(1 as id, 'John' as name).name as person_name;
+
+-- name: TestStructFieldAccess2 :one
+SELECT 
+  STRUCT<id INT64, name STRING>(42, 'Alice').name as typed_name;

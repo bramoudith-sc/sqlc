@@ -10,6 +10,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"time"
+
+	"cloud.google.com/go/spanner"
 )
 
 const getActiveUsers = `-- name: GetActiveUsers :many
@@ -319,6 +321,25 @@ func (q *Queries) GetUsersWithPostCount(ctx context.Context) ([]GetUsersWithPost
 	return items, nil
 }
 
+const testArrayIndexAccess = `-- name: TestArrayIndexAccess :one
+SELECT 
+  ['apple', 'banana', 'cherry'][1] as second_fruit,
+  ARRAY<INT64>[10, 20, 30][OFFSET(0)] as first_number;
+`
+
+type TestArrayIndexAccessRow struct {
+	SecondFruit string
+	FirstNumber int64
+}
+
+// Test array index access
+func (q *Queries) TestArrayIndexAccess(ctx context.Context) (TestArrayIndexAccessRow, error) {
+	row := q.db.QueryRowContext(ctx, testArrayIndexAccess)
+	var i TestArrayIndexAccessRow
+	err := row.Scan(&i.SecondFruit, &i.FirstNumber)
+	return i, err
+}
+
 const testArrayLiteral = `-- name: TestArrayLiteral :one
 SELECT CASE WHEN true THEN [1, 2, 3] ELSE [4, 5, 6] END as array_value;
 `
@@ -482,6 +503,29 @@ func (q *Queries) TestIntegerLiteral(ctx context.Context) (int64, error) {
 	return int_value, err
 }
 
+const testIntervalRange = `-- name: TestIntervalRange :one
+SELECT INTERVAL '1-2' YEAR TO MONTH as interval_range;
+`
+
+func (q *Queries) TestIntervalRange(ctx context.Context) (spanner.Interval, error) {
+	row := q.db.QueryRowContext(ctx, testIntervalRange)
+	var interval_range spanner.Interval
+	err := row.Scan(&interval_range)
+	return interval_range, err
+}
+
+const testIntervalSingle = `-- name: TestIntervalSingle :one
+SELECT INTERVAL 5 DAY as interval_days;
+`
+
+// Test INTERVAL support
+func (q *Queries) TestIntervalSingle(ctx context.Context) (spanner.Interval, error) {
+	row := q.db.QueryRowContext(ctx, testIntervalSingle)
+	var interval_days spanner.Interval
+	err := row.Scan(&interval_days)
+	return interval_days, err
+}
+
 const testJsonLiteral = `-- name: TestJsonLiteral :one
 SELECT CASE WHEN true THEN JSON '{"key": "value"}' ELSE JSON '{}' END as json_value;
 `
@@ -581,6 +625,31 @@ func (q *Queries) TestStringLiteral(ctx context.Context) (string, error) {
 	return string_value, err
 }
 
+const testStructFieldAccess = `-- name: TestStructFieldAccess :one
+SELECT 
+  STRUCT(1 as id, 'John' as name).name as person_name;
+`
+
+// Test struct field access
+func (q *Queries) TestStructFieldAccess(ctx context.Context) (string, error) {
+	row := q.db.QueryRowContext(ctx, testStructFieldAccess)
+	var person_name string
+	err := row.Scan(&person_name)
+	return person_name, err
+}
+
+const testStructFieldAccess2 = `-- name: TestStructFieldAccess2 :one
+SELECT 
+  STRUCT<id INT64, name STRING>(42, 'Alice').name as typed_name;
+`
+
+func (q *Queries) TestStructFieldAccess2(ctx context.Context) (string, error) {
+	row := q.db.QueryRowContext(ctx, testStructFieldAccess2)
+	var typed_name string
+	err := row.Scan(&typed_name)
+	return typed_name, err
+}
+
 const testTimestampLiteral = `-- name: TestTimestampLiteral :one
 SELECT CASE WHEN true THEN TIMESTAMP '2024-01-01 10:00:00' ELSE TIMESTAMP '2024-12-31 23:59:59' END as timestamp_value;
 `
@@ -590,4 +659,38 @@ func (q *Queries) TestTimestampLiteral(ctx context.Context) (time.Time, error) {
 	var timestamp_value time.Time
 	err := row.Scan(&timestamp_value)
 	return timestamp_value, err
+}
+
+const testTupleStruct = `-- name: TestTupleStruct :one
+SELECT (100, 'tuple', DATE '2024-01-01') as tuple_value;
+`
+
+func (q *Queries) TestTupleStruct(ctx context.Context) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, testTupleStruct)
+	var tuple_value interface{}
+	err := row.Scan(&tuple_value)
+	return tuple_value, err
+}
+
+const testTypedStruct = `-- name: TestTypedStruct :one
+SELECT STRUCT<x INT64, y STRING, z BOOL>(42, 'world', false) as typed_struct;
+`
+
+func (q *Queries) TestTypedStruct(ctx context.Context) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, testTypedStruct)
+	var typed_struct interface{}
+	err := row.Scan(&typed_struct)
+	return typed_struct, err
+}
+
+const testTypelessStruct = `-- name: TestTypelessStruct :one
+SELECT STRUCT(1, 'hello', true) as struct_value;
+`
+
+// Test STRUCT support
+func (q *Queries) TestTypelessStruct(ctx context.Context) (interface{}, error) {
+	row := q.db.QueryRowContext(ctx, testTypelessStruct)
+	var struct_value interface{}
+	err := row.Scan(&struct_value)
+	return struct_value, err
 }

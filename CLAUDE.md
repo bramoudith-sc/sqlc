@@ -114,6 +114,27 @@ func (p *Parser) IsReservedKeyword(s string) bool {
 }
 ```
 
+### For AST Debugging and Analysis
+Use the memefish parse tool to examine AST structure directly:
+```bash
+# Parse a complete SQL statement
+go run github.com/cloudspannerecosystem/memefish/tools/parse@latest 'SELECT * FROM users'
+
+# Parse an expression with -mode expr
+go run github.com/cloudspannerecosystem/memefish/tools/parse@latest -mode expr 'STRUCT(1 as id, "John" as name).name'
+
+# Parse DDL statements with -mode ddl  
+go run github.com/cloudspannerecosystem/memefish/tools/parse@latest -mode ddl 'CREATE TABLE users (id INT64) PRIMARY KEY (id)'
+```
+
+This tool displays:
+- Colored AST structure with node types
+- Field names and values
+- Position information
+- Reconstructed SQL from the AST
+
+Very useful for understanding how memefish parses specific SQL constructs and what AST nodes to handle in convert.go.
+
 ## Development Workflow
 
 1. **Make changes** in `internal/engine/spanner/`

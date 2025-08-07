@@ -31,7 +31,7 @@ func spannerType(req *plugin.GenerateRequest, options *opts.Options, col *plugin
 	}
 
 	switch dt {
-	case "int64":
+	case "int", "int64":
 		// INT64 - following Spanner Go client conventions
 		// Spanner client: int, int64, *int64, NullInt64
 		if notNull {
@@ -52,7 +52,7 @@ func spannerType(req *plugin.GenerateRequest, options *opts.Options, col *plugin
 		}
 		return "sql.NullFloat64" // No NullFloat32 in database/sql
 
-	case "float64":
+	case "float", "float64":
 		// FLOAT64 - following Spanner Go client conventions
 		// Spanner client: float64, *float64, NullFloat64
 		if notNull {

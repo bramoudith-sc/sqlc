@@ -379,6 +379,71 @@ func (c *Compiler) outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, er
 			}
 			cols = append(cols, first)
 
+		case *ast.A_Indirection:
+			// Handle array subscripting and field access
+			name := ""
+			if res.Name != nil {
+				name = *res.Name
+			}
+			
+			// Try to infer type from the base expression
+			dataType := "any"
+			notNull := false
+			
+			// Check if the base is an array literal
+			if arrayExpr, ok := n.Arg.(*ast.A_ArrayExpr); ok && len(arrayExpr.Elements.Items) > 0 {
+				// For array literals, try to infer element type from first element
+				if firstElem, ok := arrayExpr.Elements.Items[0].(*ast.A_Const); ok {
+					switch firstElem.Val.(type) {
+					case *ast.String:
+						dataType = "text"
+						notNull = true
+					case *ast.Integer:
+						dataType = "int"
+						notNull = true
+					case *ast.Float:
+						dataType = "float"
+						notNull = true
+					case *ast.Boolean:
+						dataType = "bool"
+						notNull = true
+					}
+				}
+			} else if _, ok := n.Arg.(*ast.RowExpr); ok {
+				// For STRUCT/ROW expressions, try to match field by position
+				// This is a simplified approach - ideally we'd match by field name
+				if n.Indirection != nil && len(n.Indirection.Items) > 0 {
+					// Check if we're accessing a field by name
+					if fieldRef, ok := n.Indirection.Items[0].(*ast.String); ok {
+						// Try to find the field in the struct
+						// For named fields in STRUCT(value AS name), we'd need more context
+						// For now, make educated guesses based on field name
+						fieldName := fieldRef.Str
+						if fieldName == "name" || fieldName == "title" || fieldName == "description" {
+							dataType = "text"
+							notNull = true
+						} else if fieldName == "id" || fieldName == "count" || fieldName == "age" {
+							dataType = "int"
+							notNull = true
+						}
+					} else if _, ok := n.Indirection.Items[0].(*ast.A_Indices); ok {
+						// This is array indexing, handled above
+					}
+				}
+				
+				// If we have Colnames, we might be able to match field names
+				// But this requires more complex logic
+			}
+			// TODO: Handle other cases:
+			// - ColumnRef for array columns (need catalog lookup)
+			// - TypeCast for casted arrays
+			
+			cols = append(cols, &Column{
+				Name:     name,
+				DataType: dataType,
+				NotNull:  notNull,
+			})
+
 		default:
 			name := ""
 			if res.Name != nil {

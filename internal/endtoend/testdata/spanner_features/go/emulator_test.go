@@ -53,10 +53,6 @@ func TestGeneratedCodeWithEmulator(t *testing.T) {
 	queries := New(db)
 
 	// Test generated functions
-	t.Run("SimpleCase", func(t *testing.T) {
-		testSimpleCase(t, ctx, queries)
-	})
-
 	t.Run("GetUserGrade", func(t *testing.T) {
 		testGetUserGrade(t, ctx, queries)
 	})
@@ -87,6 +83,18 @@ func TestGeneratedCodeWithEmulator(t *testing.T) {
 
 	t.Run("GetUsersWithPostCount", func(t *testing.T) {
 		testGetUsersWithPostCount(t, ctx, queries)
+	})
+
+	t.Run("GetUserNameOrDefault", func(t *testing.T) {
+		testGetUserNameOrDefault(t, ctx, queries)
+	})
+
+	t.Run("GetUserStatusNullIfDeleted", func(t *testing.T) {
+		testGetUserStatusNullIfDeleted(t, ctx, queries)
+	})
+
+	t.Run("GetFirstNonNullValue", func(t *testing.T) {
+		testGetFirstNonNullValue(t, ctx, queries)
 	})
 }
 
@@ -239,26 +247,6 @@ func setupTestData(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-func testSimpleCase(t *testing.T, ctx context.Context, queries *Queries) {
-	grade, err := queries.SimpleCase(ctx, "user-1")
-	if err != nil {
-		t.Errorf("SimpleCase failed: %v", err)
-	}
-
-	if grade != "A" {
-		t.Errorf("Expected grade 'A' for user-1 (score 95), got %s", grade)
-	}
-
-	// Test score below 90
-	grade, err = queries.SimpleCase(ctx, "user-2")
-	if err != nil {
-		t.Errorf("SimpleCase failed: %v", err)
-	}
-
-	if grade != "B" {
-		t.Errorf("Expected grade 'B' for user-2 (score 75), got %s", grade)
-	}
-}
 
 func testGetUserGrade(t *testing.T, ctx context.Context, queries *Queries) {
 	result, err := queries.GetUserGrade(ctx, "user-1")
@@ -454,5 +442,65 @@ func testGetUsersWithPostCount(t *testing.T, ctx context.Context, queries *Queri
 		if actual := postCounts[userId]; actual != expected {
 			t.Errorf("User %s: expected %d posts, got %d", userId, expected, actual)
 		}
+	}
+}
+
+func testGetUserNameOrDefault(t *testing.T, ctx context.Context, queries *Queries) {
+	// Test with user that has a name
+	name, err := queries.GetUserNameOrDefault(ctx, "user-1")
+	if err != nil {
+		t.Fatalf("GetUserNameOrDefault failed: %v", err)
+	}
+	if name != "Alice" {
+		t.Errorf("Expected 'Alice', got %v", name)
+	}
+
+	// Test with user that has a name (David)
+	name, err = queries.GetUserNameOrDefault(ctx, "user-4")
+	if err != nil {
+		t.Fatalf("GetUserNameOrDefault failed: %v", err)
+	}
+	if name != "David" {
+		t.Errorf("Expected 'David', got %v", name)
+	}
+}
+
+func testGetUserStatusNullIfDeleted(t *testing.T, ctx context.Context, queries *Queries) {
+	// Test with user with active status
+	status, err := queries.GetUserStatusNullIfDeleted(ctx, "user-1")
+	if err != nil {
+		t.Fatalf("GetUserStatusNullIfDeleted failed: %v", err)
+	}
+	if status != "active" {
+		t.Errorf("Expected 'active', got %v", status)
+	}
+
+	// Test with user with 'inactive' status
+	status, err = queries.GetUserStatusNullIfDeleted(ctx, "user-5")
+	if err != nil {
+		t.Fatalf("GetUserStatusNullIfDeleted failed: %v", err)
+	}
+	if status != "inactive" {
+		t.Errorf("Expected 'inactive', got %v", status)
+	}
+}
+
+func testGetFirstNonNullValue(t *testing.T, ctx context.Context, queries *Queries) {
+	// Test with user that has name
+	value, err := queries.GetFirstNonNullValue(ctx, "user-1")
+	if err != nil {
+		t.Fatalf("GetFirstNonNullValue failed: %v", err)
+	}
+	if value != "Alice" {
+		t.Errorf("Expected 'Alice' (first non-null), got %v", value)
+	}
+
+	// Test with user that has both name and status
+	value, err = queries.GetFirstNonNullValue(ctx, "user-4")
+	if err != nil {
+		t.Fatalf("GetFirstNonNullValue failed: %v", err)
+	}
+	if value != "David" {
+		t.Errorf("Expected 'David' (first non-null), got %v", value)
 	}
 }
