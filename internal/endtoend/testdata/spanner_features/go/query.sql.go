@@ -330,6 +330,43 @@ func (q *Queries) TestArrayLiteral(ctx context.Context) (interface{}, error) {
 	return array_value, err
 }
 
+const testArraySubQuery = `-- name: TestArraySubQuery :many
+SELECT 
+  u.id,
+  u.name,
+  ARRAY(SELECT p.title FROM posts p WHERE p.user_id = u.id) as post_titles
+FROM users u;
+`
+
+type TestArraySubQueryRow struct {
+	ID         string
+	Name       sql.NullString
+	PostTitles interface{}
+}
+
+func (q *Queries) TestArraySubQuery(ctx context.Context) ([]TestArraySubQueryRow, error) {
+	rows, err := q.db.QueryContext(ctx, testArraySubQuery)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TestArraySubQueryRow
+	for rows.Next() {
+		var i TestArraySubQueryRow
+		if err := rows.Scan(&i.ID, &i.Name, &i.PostTitles); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const testBooleanLiteral = `-- name: TestBooleanLiteral :one
 SELECT CASE WHEN true THEN true ELSE false END as bool_value;
 `
@@ -386,6 +423,28 @@ func (q *Queries) TestDateLiteral(ctx context.Context) (time.Time, error) {
 	var date_value time.Time
 	err := row.Scan(&date_value)
 	return date_value, err
+}
+
+const testExistsSubQuery = `-- name: TestExistsSubQuery :one
+SELECT 
+  u.id,
+  u.name,
+  EXISTS(SELECT 1 FROM posts p WHERE p.user_id = u.id) as has_posts
+FROM users u
+WHERE u.id = @user_id;
+`
+
+type TestExistsSubQueryRow struct {
+	ID       string
+	Name     sql.NullString
+	HasPosts bool
+}
+
+func (q *Queries) TestExistsSubQuery(ctx context.Context, id string) (TestExistsSubQueryRow, error) {
+	row := q.db.QueryRowContext(ctx, testExistsSubQuery, id)
+	var i TestExistsSubQueryRow
+	err := row.Scan(&i.ID, &i.Name, &i.HasPosts)
+	return i, err
 }
 
 const testExplicitCast = `-- name: TestExplicitCast :one
@@ -454,6 +513,27 @@ func (q *Queries) TestNumericLiteral(ctx context.Context) (string, error) {
 	var numeric_value string
 	err := row.Scan(&numeric_value)
 	return numeric_value, err
+}
+
+const testScalarSubQuery = `-- name: TestScalarSubQuery :one
+SELECT 
+  u.name,
+  (SELECT MAX(score) FROM users WHERE status = 'active') as max_score
+FROM users u
+WHERE u.id = @user_id;
+`
+
+type TestScalarSubQueryRow struct {
+	Name     sql.NullString
+	MaxScore interface{}
+}
+
+// Test subquery support
+func (q *Queries) TestScalarSubQuery(ctx context.Context, id string) (TestScalarSubQueryRow, error) {
+	row := q.db.QueryRowContext(ctx, testScalarSubQuery, id)
+	var i TestScalarSubQueryRow
+	err := row.Scan(&i.Name, &i.MaxScore)
+	return i, err
 }
 
 const testSimpleDateCast = `-- name: TestSimpleDateCast :one

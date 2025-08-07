@@ -140,6 +140,14 @@ func (c *cc) convert(n ast.Node) sqlcast.Node {
 		return c.convertArrayLiteral(node)
 	case *ast.FloatLiteral:
 		return c.convertFloatLiteral(node)
+	
+	// Subquery expressions
+	case *ast.ScalarSubQuery:
+		return c.convertScalarSubQuery(node)
+	case *ast.ArraySubQuery:
+		return c.convertArraySubQuery(node)
+	case *ast.ExistsSubQuery:
+		return c.convertExistsSubQuery(node)
 
 	// Other nodes
 	case *ast.Star:
@@ -1359,6 +1367,43 @@ func (c *cc) convertJSONLiteral(n *ast.JSONLiteral) sqlcast.Node {
 			},
 		},
 		Location: int(n.JSON),
+	}
+}
+
+func (c *cc) convertScalarSubQuery(n *ast.ScalarSubQuery) sqlcast.Node {
+	// Scalar subquery: (SELECT expr FROM ...)
+	// Convert to SubLink with EXPR_SUBLINK type
+	return &sqlcast.SubLink{
+		SubLinkType: sqlcast.EXPR_SUBLINK,
+		Subselect:   c.convert(n.Query),
+		Location:    int(n.Lparen),
+	}
+}
+
+func (c *cc) convertArraySubQuery(n *ast.ArraySubQuery) sqlcast.Node {
+	// ARRAY(SELECT ...) 
+	// Convert to ArrayExpr with subquery
+	return &sqlcast.A_ArrayExpr{
+		Elements: &sqlcast.List{
+			Items: []sqlcast.Node{
+				&sqlcast.SubLink{
+					SubLinkType: sqlcast.ARRAY_SUBLINK,
+					Subselect:   c.convert(n.Query),
+					Location:    int(n.Array),
+				},
+			},
+		},
+		Location: int(n.Array),
+	}
+}
+
+func (c *cc) convertExistsSubQuery(n *ast.ExistsSubQuery) sqlcast.Node {
+	// EXISTS(SELECT ...)
+	// Convert to SubLink with EXISTS_SUBLINK type
+	return &sqlcast.SubLink{
+		SubLinkType: sqlcast.EXISTS_SUBLINK,
+		Subselect:   c.convert(n.Query),
+		Location:    int(n.Exists),
 	}
 }
 

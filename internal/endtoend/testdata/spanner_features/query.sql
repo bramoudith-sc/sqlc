@@ -139,3 +139,26 @@ SELECT CASE WHEN true THEN [1, 2, 3] ELSE [4, 5, 6] END as array_value;
 
 -- name: TestNullLiteral :one
 SELECT CASE WHEN false THEN 'value' ELSE NULL END as null_value;
+
+-- Test subquery support
+-- name: TestScalarSubQuery :one
+SELECT 
+  u.name,
+  (SELECT MAX(score) FROM users WHERE status = 'active') as max_score
+FROM users u
+WHERE u.id = @user_id;
+
+-- name: TestExistsSubQuery :one
+SELECT 
+  u.id,
+  u.name,
+  EXISTS(SELECT 1 FROM posts p WHERE p.user_id = u.id) as has_posts
+FROM users u
+WHERE u.id = @user_id;
+
+-- name: TestArraySubQuery :many
+SELECT 
+  u.id,
+  u.name,
+  ARRAY(SELECT p.title FROM posts p WHERE p.user_id = u.id) as post_titles
+FROM users u;
