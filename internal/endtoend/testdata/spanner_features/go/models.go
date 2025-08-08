@@ -19,6 +19,7 @@ type Post struct {
 type User struct {
 	ID        string
 	Name      sql.NullString
+	Email     sql.NullString
 	Score     sql.NullInt64
 	Status    sql.NullString
 	DeletedAt sql.NullTime

@@ -1,6 +1,7 @@
 CREATE TABLE users (
     id STRING(36) NOT NULL,
     name STRING(100),
+    email STRING(255),
     score INT64,
     status STRING(20),
     deleted_at TIMESTAMP
