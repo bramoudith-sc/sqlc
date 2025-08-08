@@ -409,30 +409,6 @@ func (c *Compiler) outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, er
 						notNull = true
 					}
 				}
-			} else if _, ok := n.Arg.(*ast.RowExpr); ok {
-				// For STRUCT/ROW expressions, try to match field by position
-				// This is a simplified approach - ideally we'd match by field name
-				if n.Indirection != nil && len(n.Indirection.Items) > 0 {
-					// Check if we're accessing a field by name
-					if fieldRef, ok := n.Indirection.Items[0].(*ast.String); ok {
-						// Try to find the field in the struct
-						// For named fields in STRUCT(value AS name), we'd need more context
-						// For now, make educated guesses based on field name
-						fieldName := fieldRef.Str
-						if fieldName == "name" || fieldName == "title" || fieldName == "description" {
-							dataType = "text"
-							notNull = true
-						} else if fieldName == "id" || fieldName == "count" || fieldName == "age" {
-							dataType = "int"
-							notNull = true
-						}
-					} else if _, ok := n.Indirection.Items[0].(*ast.A_Indices); ok {
-						// This is array indexing, handled above
-					}
-				}
-				
-				// If we have Colnames, we might be able to match field names
-				// But this requires more complex logic
 			}
 			// TODO: Handle other cases:
 			// - ColumnRef for array columns (need catalog lookup)

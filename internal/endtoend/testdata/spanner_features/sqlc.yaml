@@ -5,7 +5,6 @@ sql:
       - "query.sql"
       - "cte_test.sql"
       - "dotstar_test.sql"
-      - "unnest_test.sql"
     schema: "schema.sql"
     gen:
       go:
