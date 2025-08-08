@@ -196,3 +196,101 @@ When implementing new features, ask:
 3. Does this follow the established patterns for Lists and wrapping?
 4. Have I tested with both emulator and generated code?
 5. How do other engines handle this scenario?
+
+## Critical Development Principles for Engine Implementation
+
+### NEVER Modify Common Logic Without Exhaustive Verification
+
+**Principle**: Common logic modifications should be the absolute last resort. Always exhaust all engine-specific alternatives first.
+
+#### Development Process for New Features
+
+1. **Engine-Specific Solution First**
+   - Implement the feature entirely within the engine directory (`internal/engine/spanner/`)
+   - Use convert.go to transform AST nodes to achieve desired behavior
+   - Consider creating wrapper structures or intermediate representations
+
+2. **Investigate Existing Patterns**
+   - Check how PostgreSQL/SQLite/MySQL handle similar features
+   - Verify if they required common logic changes or solved it engine-side
+   - Test the same SQL patterns with other engines to understand behavior
+
+3. **Document Investigation Results**
+   - If common logic changes seem necessary, document ALL attempted alternatives
+   - Include specific test cases that fail without common logic changes
+   - Explain why engine-specific solutions are insufficient
+
+4. **Test Without Common Logic Changes**
+   - Create comprehensive test cases
+   - Verify that the issue is truly unsolvable without common changes
+   - Check if the "problem" is actually just a missing/incorrect test setup
+
+5. **If Common Logic Changes Are Unavoidable**
+   - DO NOT COMMIT the changes to common logic
+   - Instead, add detailed comments in the engine code explaining:
+     ```go
+     // LIMITATION: Feature X requires common logic changes
+     // Attempted solutions:
+     // 1. [Approach A] - Failed because...
+     // 2. [Approach B] - Failed because...
+     // Required change: [File] needs [specific modification]
+     // Workaround: Currently returns interface{} instead of proper type
+     ```
+
+### Common Logic Modification Anti-Patterns (AVOID)
+
+1. **Adding engine-specific cases to output_columns.go**
+   - Wrong: Adding special handling for Spanner-specific nodes
+   - Right: Transform nodes in convert.go to existing supported structures
+
+2. **Modifying resolve.go for parameter handling**
+   - Wrong: Adding new parameter resolution cases
+   - Right: Ensure proper schema/table setup and use existing resolution
+
+3. **Type inference heuristics**
+   - Wrong: Guessing types based on field names or patterns
+   - Right: Use explicit type information or return interface{}
+
+### Lessons from Real Issues
+
+#### Example 1: UNNEST Support
+- **Problem**: Value table semantics don't map to PostgreSQL model
+- **Attempted**: Multiple AST transformation approaches
+- **Result**: Documented as limitation requiring common logic changes
+- **Learning**: Some semantic mismatches are fundamental and cannot be bridged
+
+#### Example 2: ColumnRef in INSERT
+- **Problem**: Parameters not resolving correctly in INSERT statements
+- **Root Cause**: Missing column in test schema, not a code issue
+- **Learning**: Always verify test setup before assuming code changes needed
+
+#### Example 3: A_Indirection for Array Access
+- **Initial Assumption**: Spanner-specific feature needing common logic
+- **Investigation**: PostgreSQL also uses A_Indirection for array access
+- **Finding**: PostgreSQL has analyzer for type resolution, Spanner doesn't
+- **Decision**: Minimal support acceptable as it benefits multiple engines
+
+### Testing Protocol Before Claiming Common Logic Need
+
+1. Create minimal reproduction case
+2. Test with all engines to verify engine-specific issue
+3. Check if feature works with different SQL syntax
+4. Verify schema and test data are correct
+5. Try alternative AST transformations in convert.go
+6. Document all attempted workarounds
+
+### Documentation Requirements
+
+When a limitation requires common logic changes, document in `internal/engine/spanner/FEATURES.md`:
+
+```markdown
+### Feature Name
+- **Status**: Partially implemented / Not implemented
+- **Limitation**: [Specific description]
+- **Root Cause**: [Technical explanation]
+- **Required Common Logic Change**: [File and modification needed]
+- **Workaround**: [Current behavior if any]
+- **Test Cases**: [List of SQL that should work but doesn't]
+```
+
+This ensures future developers understand exactly what's needed and why.

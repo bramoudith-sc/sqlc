@@ -379,46 +379,6 @@ func (c *Compiler) outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, er
 			}
 			cols = append(cols, first)
 
-		case *ast.A_Indirection:
-			// Handle array subscripting and field access
-			name := ""
-			if res.Name != nil {
-				name = *res.Name
-			}
-			
-			// Try to infer type from the base expression
-			dataType := "any"
-			notNull := false
-			
-			// Check if the base is an array literal
-			if arrayExpr, ok := n.Arg.(*ast.A_ArrayExpr); ok && len(arrayExpr.Elements.Items) > 0 {
-				// For array literals, try to infer element type from first element
-				if firstElem, ok := arrayExpr.Elements.Items[0].(*ast.A_Const); ok {
-					switch firstElem.Val.(type) {
-					case *ast.String:
-						dataType = "text"
-						notNull = true
-					case *ast.Integer:
-						dataType = "int"
-						notNull = true
-					case *ast.Float:
-						dataType = "float"
-						notNull = true
-					case *ast.Boolean:
-						dataType = "bool"
-						notNull = true
-					}
-				}
-			}
-			// TODO: Handle other cases:
-			// - ColumnRef for array columns (need catalog lookup)
-			// - TypeCast for casted arrays
-			
-			cols = append(cols, &Column{
-				Name:     name,
-				DataType: dataType,
-				NotNull:  notNull,
-			})
 
 		default:
 			name := ""

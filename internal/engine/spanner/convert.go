@@ -1966,6 +1966,22 @@ func (c *cc) convertUnnest(n *ast.Unnest) sqlcast.Node {
 	// UNNEST in Spanner returns a value table, which doesn't exist in PostgreSQL
 	// We need to map this to PostgreSQL's table-valued function approach
 	
+	// LIMITATION: UNNEST column resolution requires common logic changes
+	// Root cause: Spanner's value tables have unnamed columns, PostgreSQL expects named columns
+	//
+	// Attempted solutions:
+	// 1. RangeFunction with column aliases - Column resolution fails in output_columns.go
+	// 2. Subquery wrapping - Parser doesn't support UNNEST in SELECT clause
+	// 3. Custom table generation - Requires changes to sourceTables in common logic
+	//
+	// Required change: output_columns.go needs special handling for UNNEST RangeFunction
+	// Specifically, when GetFunc fails but alias has Colnames, it should create columns
+	//
+	// Workaround: AST conversion implemented but non-functional for column resolution
+	// Test cases that should work but don't:
+	// - SELECT value FROM UNNEST([1,2,3]) AS value
+	// - SELECT value, pos FROM UNNEST(['a','b']) AS value WITH OFFSET AS pos
+	
 	// Build the UNNEST function call
 	unnestCall := &sqlcast.FuncCall{
 		Func: &sqlcast.FuncName{
@@ -2031,6 +2047,19 @@ func (c *cc) convertUnnest(n *ast.Unnest) sqlcast.Node {
 
 func (c *cc) convertIndexExpr(n *ast.IndexExpr) sqlcast.Node {
 	// array[index] or array[OFFSET(n)] or array[ORDINAL(n)]
+	
+	// LIMITATION: Array element type inference requires common logic changes
+	// Current behavior: Returns A_Indirection which generates interface{} type
+	// 
+	// Attempted solutions:
+	// 1. Type annotation in AST - Not possible without modifying sqlcast types
+	// 2. Wrapper with TypeCast - Doesn't work for dynamic array types
+	// 3. Custom node type - Would require common logic to recognize it
+	//
+	// Required change: output_columns.go needs A_Indirection case for type inference
+	// This is also needed by PostgreSQL but PG uses analyzer for type resolution
+	// 
+	// Workaround: Currently generates interface{} for array element access
 	// Convert to A_Indirection or A_ArrayExpr subscript
 	return &sqlcast.A_Indirection{
 		Arg: c.convert(n.Expr),
