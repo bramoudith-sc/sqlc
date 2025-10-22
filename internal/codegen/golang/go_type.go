@@ -89,6 +89,8 @@ func goInnerType(req *plugin.GenerateRequest, options *opts.Options, col *plugin
 		return postgresType(req, options, col)
 	case "sqlite":
 		return sqliteType(req, options, col)
+	case "spanner":
+		return spannerType(req, options, col)
 	default:
 		return "interface{}"
 	}

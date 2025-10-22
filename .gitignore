@@ -9,3 +9,13 @@ __pycache__
 .devenv*
 devenv.local.nix
 
+# Binary
+/sqlc
+
+# Development notes and feedback
+docs/memefish-feedback.md
+
+# Temporary test files
+test_*.sql
+sqlc-debug
+

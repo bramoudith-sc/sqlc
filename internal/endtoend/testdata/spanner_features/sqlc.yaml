@@ -1,0 +1,12 @@
+version: "2"
+sql:
+  - engine: "spanner"
+    queries: 
+      - "query.sql"
+      - "cte_test.sql"
+      - "dotstar_test.sql"
+    schema: "schema.sql"
+    gen:
+      go:
+        package: "spanner_features"
+        out: "go"

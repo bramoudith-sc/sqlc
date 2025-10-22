@@ -17,6 +17,7 @@ type QueryValue struct {
 	Struct      *Struct
 	Typ         string
 	SQLDriver   opts.SQLDriver
+	Engine      string // The SQL engine (postgresql, mysql, sqlite, spanner)
 
 	// Column is kept so late in the generation process around to differentiate
 	// between mysql slices and pg arrays
@@ -267,6 +268,8 @@ type Query struct {
 	Arg          QueryValue
 	// Used for :copyfrom
 	Table *plugin.Identifier
+	// Engine is the SQL engine (postgresql, mysql, sqlite, spanner)
+	Engine string
 }
 
 func (q Query) hasRetType() bool {

@@ -379,6 +379,7 @@ func (c *Compiler) outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, er
 			}
 			cols = append(cols, first)
 
+
 		default:
 			name := ""
 			if res.Name != nil {

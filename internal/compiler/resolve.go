@@ -628,6 +628,7 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 				}
 			}
 
+
 		default:
 			slog.Debug("unsupported reference type", "type", fmt.Sprintf("%T", n))
 			addUnknownParam(ref)
