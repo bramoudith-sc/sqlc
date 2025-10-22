@@ -1,4 +1,4 @@
-module github.com/sqlc-dev/sqlc
+module github.com/bramoudith-sc/sqlc
 
 go 1.24.0
 
